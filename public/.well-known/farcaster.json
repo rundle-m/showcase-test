@@ -1,18 +1,17 @@
 {
   "accountAssociation": {
-    "header": "",
-    "payload": "",
-    "signature": ""
+    "header": "eyJmaWQiOjM5OTg4MywidHlwZSI6ImF1dGgiLCJrZXkiOiIweDQxRGJkZjA4NzkwYWE4OTY5MzU1Y0FFMGM2Q2NiMUY0NzIzQzMzYzYifQ",
+    "payload": "eyJkb21haW4iOiJzaG93Y2FzZS10ZXN0Mi10ZW4udmVyY2VsLmFwcCJ9",
+    "signature": "/elxlHvKlTakJiY0ALFPUlMGtXD0gIA2qIji613td7FTtoZ6RoZvdiiBvXrAe6ZNH9ZsEWSqGDCZhWqFkCbVIRs="
   },
   "frame": {
     "version": "1",
     "name": "My Showcase",
     "iconUrl": "https://raw.githubusercontent.com/vbuterin/flappy-bird/master/assets/bird.png",
-    "homeUrl": "https://YOUR-APP-URL.vercel.app",
+    "homeUrl": "https://showcase-test2-ten.vercel.app",
     "imageUrl": "https://raw.githubusercontent.com/vbuterin/flappy-bird/master/assets/bird.png",
     "buttonTitle": "View Showcase",
     "splashImageUrl": "https://raw.githubusercontent.com/vbuterin/flappy-bird/master/assets/bird.png",
-    "splashBackgroundColor": "#f5f5f4",
-    "webhookUrl": "https://YOUR-APP-URL.vercel.app/api/webhook"
-  }
+    "splashBackgroundColor": "#f5f5f4"
+    }
 }
