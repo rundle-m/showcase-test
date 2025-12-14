@@ -124,7 +124,7 @@ export default function App() {
     <div className="min-h-screen bg-stone-50 font-sans text-stone-900 pb-24">
       
       {/* 1. HERO BANNER */}
-      <div className="h-40 w-full bg-gradient-to-r from-purple-600 to-blue-600 flex items-start justify-end p-4">
+      <div style={{ backgroundColor: 'red' }} className="h-40 w-full bg-gradient-to-r from-purple-600 to-blue-600 flex items-start justify-end p-4">
         {/* Buttons inside banner */}
         {isOwner ? (
             <button onClick={startEditing} className="bg-black/20 text-white px-4 py-1.5 rounded-full text-xs font-bold border border-white/30 backdrop-blur-md">Edit Page</button>
@@ -141,7 +141,7 @@ export default function App() {
             </div>
         </div>
         
-        <h1 className="text-4xl font-black text-stone-900 tracking-tight">{profile?.name}</h1>
+        <h1 className="text-4xl font-black text-stone-900 tracking-tight">{profile?.name} (V2)</h1>
         <p className="text-stone-500 mt-2 text-lg leading-relaxed">{profile?.bio}</p>
       </div>
 
