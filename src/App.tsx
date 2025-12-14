@@ -43,7 +43,6 @@ export default function App() {
       if (error || !data) {
         if (targetFid === currentViewerFid) {
             setIsNewUser(true);
-            // Default Data
             setFormNFTs([
                 { id: 1, name: "Highlight #1", imageUrl: "https://placehold.co/600x600/6b21a8/FFF?text=Art" },
                 { id: 2, name: "Highlight #2", imageUrl: "https://placehold.co/600x600/1e40af/FFF?text=Music" }
@@ -117,15 +116,14 @@ export default function App() {
     );
   }
 
-  // --- HOMEPAGE VIEW (MODERN THEME) ---
+  // --- HOMEPAGE VIEW (BULLETPROOF) ---
   const isOwner = viewerFid === profileFid;
 
   return (
     <div className="min-h-screen bg-stone-50 font-sans text-stone-900 pb-24">
       
-      {/* 1. HERO BANNER */}
-      <div style={{ backgroundColor: 'red' }} className="h-40 w-full bg-gradient-to-r from-purple-600 to-blue-600 flex items-start justify-end p-4">
-        {/* Buttons inside banner */}
+      {/* 1. HERO BANNER - Using Solid Color (Safe) */}
+      <div className="h-40 w-full bg-indigo-600 flex items-start justify-end p-4">
         {isOwner ? (
             <button onClick={startEditing} className="bg-black/20 text-white px-4 py-1.5 rounded-full text-xs font-bold border border-white/30 backdrop-blur-md">Edit Page</button>
         ) : (
@@ -133,25 +131,27 @@ export default function App() {
         )}
       </div>
 
-      {/* 2. IDENTITY CARD (Overlapping) */}
-      <div className="px-6 -mt-16 mb-8">
+      {/* 2. IDENTITY CARD */}
+      <div className="px-6 -mt-16 mb-8 relative z-10">
         <div className="w-28 h-28 rounded-2xl bg-white p-1.5 shadow-xl rotate-2 mb-4">
             <div className="w-full h-full bg-stone-100 rounded-xl flex items-center justify-center text-5xl overflow-hidden">
                 👤
             </div>
         </div>
-        
-        <h1 className="text-4xl font-black text-stone-900 tracking-tight">{profile?.name} (V2)</h1>
+        <h1 className="text-4xl font-black text-stone-900 tracking-tight leading-tight">{profile?.name}</h1>
         <p className="text-stone-500 mt-2 text-lg leading-relaxed">{profile?.bio}</p>
       </div>
 
-      {/* 3. CLEAN GALLERY GRID */}
+      {/* 3. BULLETPROOF GALLERY (Flexbox instead of Grid) */}
       {profile?.preferences?.showNFTs && (
         <section className="px-6 mb-10">
           <h2 className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-4">Collection</h2>
-          <div className="grid grid-cols-2 gap-4">
+          
+          {/* Using Flex Wrap instead of Grid to guarantee side-by-side */}
+          <div className="flex flex-wrap gap-4">
             {profile?.nfts?.map((nft, i) => (
-              <div key={i} className="aspect-square bg-white rounded-2xl shadow-sm border border-stone-100 overflow-hidden relative">
+              // width: calc(50% - 0.5rem) forces exactly 2 items per row
+              <div key={i} style={{ width: 'calc(50% - 0.5rem)' }} className="aspect-square bg-white rounded-2xl shadow-sm border border-stone-100 overflow-hidden relative">
                 <img src={nft.imageUrl} alt={nft.name} className="w-full h-full object-cover" />
               </div>
             ))}
