@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { sdk } from '@farcaster/frame-sdk';
 import { supabase } from './supabaseClient';
 
+// --- TYPES ---
 interface NFT { id: number; name: string; imageUrl: string; }
 interface Project { id: number; name: string; symbol: string; }
 interface Preferences { showNFTs: boolean; showProjects: boolean; }
@@ -16,6 +17,7 @@ export default function App() {
   const [isNewUser, setIsNewUser] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   
+  // Form State
   const [formName, setFormName] = useState("");
   const [formBio, setFormBio] = useState("");
   const [formNFTs, setFormNFTs] = useState<NFT[]>([]);
@@ -24,6 +26,7 @@ export default function App() {
   
   const [isSaving, setIsSaving] = useState(false);
 
+  // --- INIT LOGIC ---
   useEffect(() => {
     const init = async () => {
       const context = await sdk.context;
@@ -40,6 +43,7 @@ export default function App() {
       if (error || !data) {
         if (targetFid === currentViewerFid) {
             setIsNewUser(true);
+            // Default Data
             setFormNFTs([
                 { id: 1, name: "Highlight #1", imageUrl: "https://placehold.co/600x600/6b21a8/FFF?text=Art" },
                 { id: 2, name: "Highlight #2", imageUrl: "https://placehold.co/600x600/1e40af/FFF?text=Music" }
@@ -55,6 +59,7 @@ export default function App() {
     if (sdk && !isSDKLoaded) init();
   }, [isSDKLoaded]);
 
+  // --- ACTIONS ---
   const startEditing = () => {
     if (profile) {
       setFormName(profile.name); setFormBio(profile.bio); setFormNFTs(profile.nfts || []);
@@ -75,16 +80,16 @@ export default function App() {
     setIsSaving(true);
     const updates = { id: viewerFid, name: formName, bio: formBio, nfts: formNFTs, projects: formProjects, preferences: formPrefs };
     const { error } = await supabase.from('profiles').upsert([updates]);
-    if (error) { setIsSaving(false); alert("Error"); }
+    if (error) { setIsSaving(false); alert("Error saving!"); }
     else { setProfile(updates); setProfileFid(viewerFid); setIsNewUser(false); setIsEditing(false); setIsSaving(false); }
   };
 
   const updateNFT = (i: number, f: 'name'|'imageUrl', v: string) => { const n = [...formNFTs]; n[i] = {...n[i], [f]: v}; setFormNFTs(n); };
   const updateProject = (i: number, f: 'name'|'symbol', v: string) => { const n = [...formProjects]; n[i] = {...n[i], [f]: v}; setFormProjects(n); };
 
-  if (!isSDKLoaded || (!profile && !isNewUser)) return <div className="min-h-screen flex items-center justify-center p-10 animate-pulse text-stone-400">Loading...</div>;
+  if (!isSDKLoaded || (!profile && !isNewUser)) return <div className="min-h-screen flex items-center justify-center p-10 animate-pulse text-stone-400">Loading Homepage...</div>;
 
-  // --- EDITOR VIEW (Standard) ---
+  // --- EDITOR VIEW ---
   if (isNewUser || isEditing) {
     return (
       <div className="min-h-screen bg-stone-100 p-4 pb-20 max-w-md mx-auto">
@@ -112,16 +117,15 @@ export default function App() {
     );
   }
 
-  // --- HOMEPAGE VIEW (Safe Modern Theme) ---
+  // --- HOMEPAGE VIEW (MODERN THEME) ---
   const isOwner = viewerFid === profileFid;
 
   return (
     <div className="min-h-screen bg-stone-50 font-sans text-stone-900 pb-24">
       
-      {/* 1. HERO BANNER - Standard Block (No Absolute) */}
-      {/* This creates the purple top section. User info will be 'pulled up' onto it. */}
+      {/* 1. HERO BANNER */}
       <div className="h-40 w-full bg-gradient-to-r from-purple-600 to-blue-600 flex items-start justify-end p-4">
-        {/* EDIT BUTTON (Inside the banner) */}
+        {/* Buttons inside banner */}
         {isOwner ? (
             <button onClick={startEditing} className="bg-black/20 text-white px-4 py-1.5 rounded-full text-xs font-bold border border-white/30 backdrop-blur-md">Edit Page</button>
         ) : (
@@ -129,31 +133,26 @@ export default function App() {
         )}
       </div>
 
-      {/* 2. IDENTITY CARD - Pulled up with Negative Margin (-mt-16) */}
+      {/* 2. IDENTITY CARD (Overlapping) */}
       <div className="px-6 -mt-16 mb-8">
-        {/* Avatar */}
         <div className="w-28 h-28 rounded-2xl bg-white p-1.5 shadow-xl rotate-2 mb-4">
             <div className="w-full h-full bg-stone-100 rounded-xl flex items-center justify-center text-5xl overflow-hidden">
                 👤
             </div>
         </div>
         
-        {/* Text */}
         <h1 className="text-4xl font-black text-stone-900 tracking-tight">{profile?.name}</h1>
-        <p className="text-stone-500 mt-2 text-lg leading-relaxed max-w-sm">{profile?.bio}</p>
+        <p className="text-stone-500 mt-2 text-lg leading-relaxed">{profile?.bio}</p>
       </div>
 
-      {/* 3. CLEAN GALLERY (Standard Grid, No Text Overlay) */}
+      {/* 3. CLEAN GALLERY GRID */}
       {profile?.preferences?.showNFTs && (
         <section className="px-6 mb-10">
           <h2 className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-4">Collection</h2>
-          
-          {/* Working Grid, but rounded corners and shadows */}
           <div className="grid grid-cols-2 gap-4">
             {profile?.nfts?.map((nft, i) => (
-              <div key={i} className="aspect-square bg-white rounded-2xl shadow-sm border border-stone-100 overflow-hidden relative group">
-                {/* Image takes full space */}
-                <img src={nft.imageUrl} alt={nft.name} className="w-full h-full object-cover transition duration-500 group-hover:scale-110" />
+              <div key={i} className="aspect-square bg-white rounded-2xl shadow-sm border border-stone-100 overflow-hidden relative">
+                <img src={nft.imageUrl} alt={nft.name} className="w-full h-full object-cover" />
               </div>
             ))}
           </div>
