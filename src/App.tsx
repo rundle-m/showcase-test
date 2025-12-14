@@ -5,13 +5,12 @@ import { supabase } from './supabaseClient';
 // --- TYPES ---
 interface NFT { id: number; name: string; imageUrl: string; }
 
-// UPGRADE: Projects now act like "App Store" entries
 interface Project { 
   id: number; 
   name: string; 
-  description: string; // New field for context
-  url: string;         // The link to the miniapp/frame
-  imageUrl: string;    // Thumbnail for the project
+  description: string; 
+  url: string;         
+  imageUrl: string;    
 }
 
 interface Preferences { showNFTs: boolean; showProjects: boolean; }
@@ -42,6 +41,9 @@ export default function App() {
   const [formPrefs, setFormPrefs] = useState<Preferences>({ showNFTs: true, showProjects: true });
   
   const [isSaving, setIsSaving] = useState(false);
+  
+  // NEW: Track which project is currently fetching an image
+  const [loadingImageFor, setLoadingImageFor] = useState<number | null>(null);
 
   // --- INIT LOGIC ---
   useEffect(() => {
@@ -64,7 +66,6 @@ export default function App() {
                 { id: 1, name: "Digital Art", imageUrl: "https://placehold.co/600x600/6b21a8/FFF?text=Art" },
                 { id: 2, name: "Photography", imageUrl: "https://placehold.co/600x600/1e40af/FFF?text=Photo" }
             ]);
-            // Default "Builder" example
             setFormProjects([{ 
                 id: 1, 
                 name: "My First Frame", 
@@ -86,7 +87,6 @@ export default function App() {
   const startEditing = () => {
     if (profile) {
       setFormName(profile.name); setFormBio(profile.bio); setFormNFTs(profile.nfts || []);
-      // Ensure we handle old data gracefully if it exists
       setFormProjects(profile.projects || []); 
       setFormPrefs(profile.preferences || { showNFTs: true, showProjects: true });
       setIsEditing(true);
@@ -111,7 +111,6 @@ export default function App() {
 
   const updateNFT = (i: number, f: 'name'|'imageUrl', v: string) => { const n = [...formNFTs]; n[i] = {...n[i], [f]: v}; setFormNFTs(n); };
   
-  // UPGRADE: New Project Updater
   const updateProject = (i: number, f: keyof Project, v: string) => { 
       const n = [...formProjects]; 
       // @ts-ignore
@@ -119,14 +118,40 @@ export default function App() {
       setFormProjects(n); 
   };
 
-  // Helper to open project links
+  // NEW: The "Magic" Fetcher Function 🪄
+  const autoFillImage = async (index: number, url: string) => {
+    // 1. Validation: Don't fetch if empty or already has an image
+    if (!url || formProjects[index].imageUrl) return;
+    
+    // 2. Set loading state
+    setLoadingImageFor(index);
+
+    try {
+        // 3. Ask Microlink for the data
+        const response = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(url)}&palette=true`);
+        const data = await response.json();
+        
+        // 4. If we found an image, update the form!
+        if (data.status === 'success' && data.data.image?.url) {
+            updateProject(index, 'imageUrl', data.data.image.url);
+            
+            // Optional: Auto-fill description/title if empty? 
+            // Let's stick to just image for now to be safe.
+        }
+    } catch (e) {
+        console.error("Could not fetch preview", e);
+    } finally {
+        setLoadingImageFor(null);
+    }
+  };
+
   const openProject = (url: string) => {
       sdk.actions.openUrl(url);
   };
 
   if (!isSDKLoaded || (!profile && !isNewUser)) return <div className="min-h-screen flex items-center justify-center p-10 animate-pulse text-stone-400">Loading Homepage...</div>;
 
-  // --- EDITOR VIEW (Rich Builder Inputs) ---
+  // --- EDITOR VIEW ---
   if (isNewUser || isEditing) {
     return (
       <div className="min-h-screen bg-stone-100 p-4 pb-20 max-w-md mx-auto">
@@ -143,15 +168,28 @@ export default function App() {
                 {formPrefs.showNFTs && formNFTs.map((n,i)=><div key={i} className="mt-2"><input placeholder="Title" value={n.name} onChange={(e)=>updateNFT(i,'name',e.target.value)} className="w-full mb-1 p-1 bg-stone-50 text-sm"/><input placeholder="Image URL" value={n.imageUrl} onChange={(e)=>updateNFT(i,'imageUrl',e.target.value)} className="w-full p-1 bg-stone-50 text-xs text-blue-600"/></div>)}
             </div>
             
-            {/* UPGRADE: Builder Project Inputs */}
             <div className="bg-white p-4 rounded-xl shadow-sm space-y-3">
                 <div className="flex justify-between font-bold"><h3>Built & Collected</h3><input type="checkbox" checked={formPrefs.showProjects} onChange={(e)=>setFormPrefs({...formPrefs, showProjects: e.target.checked})} className="w-5 h-5 accent-purple-600"/></div>
                 {formPrefs.showProjects && formProjects.map((p,i)=>(
                     <div key={i} className="flex flex-col gap-2 mt-4 border-t pt-4 border-stone-100">
-                        <input placeholder="Project Name (e.g. My Remix Game)" value={p.name} onChange={(e)=>updateProject(i,'name',e.target.value)} className="w-full p-2 bg-stone-50 text-sm rounded border border-transparent focus:border-purple-300 outline-none"/>
+                        <input placeholder="Project Name" value={p.name} onChange={(e)=>updateProject(i,'name',e.target.value)} className="w-full p-2 bg-stone-50 text-sm rounded border border-transparent focus:border-purple-300 outline-none"/>
                         <input placeholder="Short Description" value={p.description || ''} onChange={(e)=>updateProject(i,'description',e.target.value)} className="w-full p-2 bg-stone-50 text-sm rounded outline-none"/>
-                        <input placeholder="Link URL (https://...)" value={p.url || ''} onChange={(e)=>updateProject(i,'url',e.target.value)} className="w-full p-2 bg-stone-50 text-xs text-blue-600 rounded outline-none font-mono"/>
-                        <input placeholder="Icon/Image URL" value={p.imageUrl || ''} onChange={(e)=>updateProject(i,'imageUrl',e.target.value)} className="w-full p-2 bg-stone-50 text-xs text-blue-600 rounded outline-none font-mono"/>
+                        
+                        {/* URL INPUT with Magic Auto-Fill */}
+                        <div className="relative">
+                            <input 
+                                placeholder="Link URL (https://...)" 
+                                value={p.url || ''} 
+                                onChange={(e)=>updateProject(i,'url',e.target.value)} 
+                                onBlur={(e) => autoFillImage(i, e.target.value)} // <--- TRIGGER ON BLUR
+                                className="w-full p-2 bg-stone-50 text-xs text-blue-600 rounded outline-none font-mono"
+                            />
+                            {loadingImageFor === i && (
+                                <span className="absolute right-2 top-2 text-xs text-purple-500 font-bold animate-pulse">Fetching...</span>
+                            )}
+                        </div>
+
+                        <input placeholder="Icon/Image URL (Auto-fills!)" value={p.imageUrl || ''} onChange={(e)=>updateProject(i,'imageUrl',e.target.value)} className="w-full p-2 bg-stone-50 text-xs text-blue-600 rounded outline-none font-mono"/>
                     </div>
                 ))}
                 <button className="w-full py-2 bg-stone-100 text-stone-500 text-sm font-bold rounded-lg mt-2" onClick={() => setFormProjects([...formProjects, { id: Date.now(), name: "", description: "", url: "", imageUrl: "" }])}>+ Add Another</button>
@@ -166,7 +204,7 @@ export default function App() {
     );
   }
 
-  // --- HOMEPAGE VIEW (V3 Builder Edition) ---
+  // --- HOMEPAGE VIEW ---
   const isOwner = viewerFid === profileFid;
 
   return (
@@ -194,7 +232,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* 3. SHOWCASE (NFTs) */}
+      {/* 3. SHOWCASE */}
       {profile?.preferences?.showNFTs && (
         <section className="px-6 mb-10">
           <h2 className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-4 ml-1">Showcase</h2>
@@ -208,19 +246,17 @@ export default function App() {
         </section>
       )}
 
-      {/* 4. BUILDER SECTION (The New Feature!) */}
+      {/* 4. BUILDER SECTION */}
       {profile?.preferences?.showProjects && (
         <section className="px-6">
           <h2 className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-4 ml-1">Built & Collected</h2>
           <div className="space-y-4">
             {profile?.projects?.map((project, i) => (
-              // The "App Store" Style Card
               <div 
                 key={i} 
                 onClick={() => openProject(project.url)}
                 className="bg-white p-4 rounded-2xl shadow-sm border border-stone-100 flex items-center gap-4 active:scale-95 transition cursor-pointer"
               >
-                {/* Thumbnail Icon */}
                 <div className="w-16 h-16 shrink-0 rounded-xl bg-stone-100 overflow-hidden border border-stone-100">
                     {project.imageUrl ? (
                         <img src={project.imageUrl} alt="icon" className="w-full h-full object-cover" />
@@ -229,7 +265,6 @@ export default function App() {
                     )}
                 </div>
                 
-                {/* Text Info */}
                 <div className="flex-1 min-w-0">
                     <h3 className="font-bold text-stone-900 truncate">{project.name || "Untitled Project"}</h3>
                     <p className="text-stone-500 text-sm truncate">{project.description || "A cool project on Farcaster."}</p>
@@ -237,11 +272,7 @@ export default function App() {
                         <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">Open App</span>
                     </div>
                 </div>
-
-                {/* Arrow */}
-                <div className="text-stone-300 font-bold text-xl">
-                    ➔
-                </div>
+                <div className="text-stone-300 font-bold text-xl">➔</div>
               </div>
             ))}
           </div>
