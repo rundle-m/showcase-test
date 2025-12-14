@@ -116,14 +116,14 @@ export default function App() {
     );
   }
 
-  // --- HOMEPAGE VIEW (BULLETPROOF) ---
+  // --- HOMEPAGE VIEW (RAW CSS STYLE) ---
   const isOwner = viewerFid === profileFid;
 
   return (
     <div className="min-h-screen bg-stone-50 font-sans text-stone-900 pb-24">
       
-      {/* 1. HERO BANNER - Using Solid Color (Safe) */}
-      <div className="h-40 w-full bg-indigo-600 flex items-start justify-end p-4">
+      {/* 1. HERO BANNER - RAW CSS COLOR */}
+      <div style={{ backgroundColor: '#7c3aed', height: '160px', width: '100%', display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', padding: '16px' }}>
         {isOwner ? (
             <button onClick={startEditing} className="bg-black/20 text-white px-4 py-1.5 rounded-full text-xs font-bold border border-white/30 backdrop-blur-md">Edit Page</button>
         ) : (
@@ -142,16 +142,20 @@ export default function App() {
         <p className="text-stone-500 mt-2 text-lg leading-relaxed">{profile?.bio}</p>
       </div>
 
-      {/* 3. BULLETPROOF GALLERY (Flexbox instead of Grid) */}
+      {/* 3. GALLERY - RAW CSS GRID */}
       {profile?.preferences?.showNFTs && (
         <section className="px-6 mb-10">
           <h2 className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-4">Collection</h2>
           
-          {/* Using Flex Wrap instead of Grid to guarantee side-by-side */}
-          <div className="flex flex-wrap gap-4">
+          {/* RAW CSS GRID EXPLANATION:
+              display: grid -> Turn on grid mode
+              gridTemplateColumns: 1fr 1fr -> Create exactly two columns of equal width
+              gap: 16px -> Space them out
+          */}
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', width: '100%' }}>
             {profile?.nfts?.map((nft, i) => (
-              // width: calc(50% - 0.5rem) forces exactly 2 items per row
-              <div key={i} style={{ width: 'calc(50% - 0.5rem)' }} className="aspect-square bg-white rounded-2xl shadow-sm border border-stone-100 overflow-hidden relative">
+              <div key={i} className="aspect-square bg-white rounded-2xl shadow-sm border border-stone-100 overflow-hidden relative">
                 <img src={nft.imageUrl} alt={nft.name} className="w-full h-full object-cover" />
               </div>
             ))}
