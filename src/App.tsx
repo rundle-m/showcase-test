@@ -214,7 +214,7 @@ export default function App() {
         <section className="mb-8">
           <div className="px-6 mb-3 flex items-center justify-between">
              <h2 className="text-sm font-bold text-stone-400 uppercase tracking-wider">Showcase</h2>
-             <span className="text-xs text-stone-300">Swipe ➔</span>
+             <span className="text-xs text-stone-300">Swipe</span>
           </div>
           
           {/* This DIV is the magic carousel container */}
