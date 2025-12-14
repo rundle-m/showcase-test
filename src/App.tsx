@@ -47,6 +47,8 @@ export default function App() {
   
   const [isNewUser, setIsNewUser] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  // NEW: Track if we should show the "Welcome" screen
+  const [showLanding, setShowLanding] = useState(false);
   
   const [formName, setFormName] = useState("");
   const [formBio, setFormBio] = useState("");
@@ -62,7 +64,7 @@ export default function App() {
     const init = async () => {
       const context = await sdk.context;
       const currentViewerFid = context?.user?.fid || 999; 
-      const fcUser = context?.user; // Grab Farcaster User Data
+      const fcUser = context?.user;
       
       setViewerFid(currentViewerFid);
 
@@ -75,18 +77,15 @@ export default function App() {
 
       if (error || !data) {
         if (targetFid === currentViewerFid) {
+            // It's ME, and I have no profile.
             setIsNewUser(true);
+            setShowLanding(true); // <--- SHOW LANDING PAGE INSTEAD OF FORM
             
-            // SMART ONBOARDING:
-            // 1. Auto-fill Name (if available)
+            // PRE-FILL DATA (Ready for when they click "Start")
             if (fcUser?.displayName) setFormName(fcUser.displayName);
-            
-            // 2. Auto-fill PFP (if available)
             if (fcUser?.pfpUrl) {
                 setFormPrefs(prev => ({ ...prev, pfpUrl: fcUser.pfpUrl }));
             }
-            
-            // Note: We skipped 'bio' because Farcaster SDK doesn't provide it in the lightweight context!
 
             setFormNFTs([
                 { id: 1, name: "Digital Art", imageUrl: "https://placehold.co/600x600/6b21a8/FFF?text=Art" },
@@ -113,7 +112,6 @@ export default function App() {
       setFormNFTs(profile.nfts || []);
       setFormProjects(profile.projects || []); 
       
-      // FIXED: Merging logic to satisfy TypeScript warning
       const defaultPrefs: Preferences = { 
         showNFTs: true, 
         showProjects: true, 
@@ -122,11 +120,15 @@ export default function App() {
         pfpUrl: undefined 
       };
       
-      // We start with defaults, then overwrite with whatever is saved in profile
       setFormPrefs({ ...defaultPrefs, ...profile.preferences });
-      
       setIsEditing(true);
     }
+  };
+
+  // NEW: Start Creating (from Landing Page)
+  const handleStartCreate = () => {
+    setShowLanding(false); // Hide welcome screen
+    setIsEditing(true);    // Show editor
   };
 
   const shareProfile = useCallback(() => {
@@ -135,7 +137,12 @@ export default function App() {
     sdk.actions.openUrl(`https://warpcast.com/~/compose?text=${encodeURIComponent(shareText)}&embeds[]=${encodeURIComponent(appUrl)}`);
   }, [viewerFid]);
 
-  const goHome = () => window.location.href = window.location.pathname;
+  // Updated: "Create Yours" just redirects to the app without params, triggering the "New User" flow
+  const handleCreateYours = () => {
+      // We essentially want to reload the app as "Me"
+      // In a real browser we'd redirect, but in a frame we can just reset state
+      window.location.href = window.location.pathname; 
+  };
 
   const handleSaveProfile = async () => {
     setIsSaving(true);
@@ -178,8 +185,34 @@ export default function App() {
   const isDarkMode = profile?.preferences?.darkMode || false;
   const isOwner = viewerFid === profileFid;
   
-  // LOGIC: Show PFP if available, otherwise show Emoji
   const profileImage = profile?.preferences?.pfpUrl;
+
+  // --- LANDING PAGE (WELCOME SCREEN) ---
+  if (isNewUser && showLanding) {
+      return (
+        <div className="min-h-screen bg-stone-50 dark:bg-stone-950 flex flex-col items-center justify-center p-6 text-center transition-colors">
+            <div className="w-24 h-24 bg-gradient-to-br from-violet-600 to-indigo-600 rounded-3xl shadow-xl flex items-center justify-center mb-8 rotate-3">
+                <span className="text-5xl">🏠</span>
+            </div>
+            <h1 className="text-3xl font-black text-stone-900 dark:text-white mb-4 tracking-tight">Your Onchain Home</h1>
+            <p className="text-stone-500 dark:text-stone-400 text-lg mb-10 max-w-xs leading-relaxed">
+                Showcase your NFTs, favorite frames, and projects in one beautiful place.
+            </p>
+            <button 
+                onClick={handleStartCreate}
+                className="w-full max-w-xs bg-stone-900 dark:bg-white text-white dark:text-stone-900 py-4 rounded-2xl font-bold shadow-lg text-lg hover:scale-105 transition-transform"
+            >
+                Create Homepage
+            </button>
+            <div className="mt-8 flex gap-2 justify-center">
+                {/* Tiny preview circles/mockup */}
+                <div className="w-2 h-2 rounded-full bg-stone-300 dark:bg-stone-700"></div>
+                <div className="w-2 h-2 rounded-full bg-stone-300 dark:bg-stone-700"></div>
+                <div className="w-2 h-2 rounded-full bg-stone-300 dark:bg-stone-700"></div>
+            </div>
+        </div>
+      );
+  }
 
   // --- MAIN RENDER ---
   return (
@@ -187,7 +220,8 @@ export default function App() {
       <div className="min-h-screen bg-stone-50 dark:bg-stone-950 font-sans text-stone-900 dark:text-stone-100 pb-24 transition-colors duration-500">
         
         {/* --- EDITOR OVERLAY --- */}
-        {(isNewUser || isEditing) && (
+        {/* Only show if we are NOT on the landing page */}
+        {(!showLanding && (isNewUser || isEditing)) && (
           <div className="fixed inset-0 z-50 bg-stone-100 dark:bg-stone-900 overflow-y-auto p-4 pb-20">
             <div className="max-w-md mx-auto space-y-6">
                <h1 className="text-2xl font-bold mb-6 text-center dark:text-white">{isEditing ? "Edit Homepage" : "Create Homepage"}</h1>
@@ -210,7 +244,6 @@ export default function App() {
 
                <div className="bg-white dark:bg-stone-800 p-4 rounded-xl shadow-sm space-y-3">
                    <h3 className="font-bold dark:text-stone-200">Identity</h3>
-                   {/* NEW: Input for PFP URL (Optional, manual override) */}
                    <div className="flex gap-3 items-center mb-2">
                        <div className="w-12 h-12 rounded-full overflow-hidden bg-stone-200 shrink-0">
                            {formPrefs.pfpUrl ? <img src={formPrefs.pfpUrl} className="w-full h-full object-cover"/> : <span className="flex items-center justify-center h-full">👤</span>}
@@ -255,17 +288,16 @@ export default function App() {
 
         {/* --- PUBLIC HOMEPAGE VIEW --- */}
         <div className={`h-48 w-full bg-gradient-to-r ${currentTheme.gradient} flex items-start justify-end p-4 transition-all duration-500`}>
-          {isOwner ? (
+          {isOwner && (
               <button onClick={startEditing} className="bg-black/20 text-white px-4 py-1.5 rounded-full text-xs font-bold border border-white/30 backdrop-blur-md hover:bg-black/30 transition">Edit Page</button>
-          ) : (
-              <button onClick={goHome} className="bg-white text-stone-900 px-4 py-1.5 rounded-full text-xs font-bold shadow-sm">🏠 Create Yours</button>
           )}
+          {/* NOTE: We removed the "Create Yours" button from top right because it will be the big button at bottom now */}
         </div>
 
         <div className="mx-4 -mt-20 mb-8 relative z-10">
           <div className="bg-white/80 dark:bg-stone-900/80 backdrop-blur-xl border border-white/50 dark:border-stone-700 p-6 rounded-3xl shadow-xl flex flex-col items-center text-center transition-colors">
               
-              {/* NEW: PROFILE PICTURE LOGIC 📸 */}
+              {/* PROFILE PICTURE */}
               <div className="w-24 h-24 -mt-16 rounded-2xl bg-white dark:bg-stone-800 p-1 shadow-lg rotate-3 mb-3">
                   <div className="w-full h-full bg-stone-100 dark:bg-stone-700 rounded-xl flex items-center justify-center text-4xl overflow-hidden">
                       {profileImage ? (
@@ -317,13 +349,19 @@ export default function App() {
           </section>
         )}
 
-        {isOwner && (
-          <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-20 w-full max-w-xs">
-              <button onClick={shareProfile} className={`w-full text-white py-4 rounded-2xl font-bold shadow-2xl hover:brightness-110 transition flex items-center justify-center gap-2 text-lg ${currentTheme.button}`}>
-                  🚀 Share Homepage
-              </button>
-          </div>
-        )}
+        {/* BOTTOM FLOATING BUTTON: Smart Logic 🧠 */}
+        <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-20 w-full max-w-xs">
+            {isOwner ? (
+                <button onClick={shareProfile} className={`w-full text-white py-4 rounded-2xl font-bold shadow-2xl hover:brightness-110 transition flex items-center justify-center gap-2 text-lg ${currentTheme.button}`}>
+                    🚀 Share Homepage
+                </button>
+            ) : (
+                /* VIEWER sees this instead! */
+                <button onClick={handleCreateYours} className="w-full bg-stone-900 dark:bg-white text-white dark:text-stone-900 py-4 rounded-2xl font-bold shadow-2xl hover:scale-105 transition flex items-center justify-center gap-2 text-lg">
+                    ✨ Create Your Homepage
+                </button>
+            )}
+        </div>
       </div>
     </div>
   );
