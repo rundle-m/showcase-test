@@ -89,6 +89,7 @@ export default function App() {
 
       if (error || !data) {
         if (targetFid === currentViewerFid) {
+            // CASE 1: New User
             setIsNewUser(true);
             setShowLanding(true);
             
@@ -106,6 +107,22 @@ export default function App() {
             }]);
         }
       } else {
+        // CASE 2: Existing User
+        
+        // NEW: AUTO-SYNC LOGIC 🔄
+        // If I am looking at my own profile, and my Farcaster PFP is different from my DB PFP...
+        if (targetFid === currentViewerFid && fcUser?.pfpUrl && data.preferences?.pfpUrl !== fcUser.pfpUrl) {
+            console.log("Auto-Syncing PFP...");
+            
+            // 1. Update the local data immediately so it feels "Live"
+            data.preferences = { ...data.preferences, pfpUrl: fcUser.pfpUrl };
+            
+            // 2. Silently update the database in the background
+            supabase.from('profiles').update({ preferences: data.preferences }).eq('id', targetFid).then(() => {
+                console.log("PFP Synced to Database");
+            });
+        }
+        
         setProfile(data);
       }
       sdk.actions.ready();
@@ -155,7 +172,6 @@ export default function App() {
 
   const updateNFT = (i: number, f: 'name'|'imageUrl', v: string) => { const n = [...formNFTs]; n[i] = {...n[i], [f]: v}; setFormNFTs(n); };
   
-  // NEW: Remove NFT 🗑️
   const removeNFT = (index: number) => {
     const n = [...formNFTs];
     n.splice(index, 1);
@@ -169,7 +185,6 @@ export default function App() {
       setFormProjects(n); 
   };
 
-  // NEW: Remove Project 🗑️
   const removeProject = (index: number) => {
     const n = [...formProjects];
     n.splice(index, 1);
@@ -271,7 +286,7 @@ export default function App() {
                    <textarea placeholder="Bio" className="w-full border-b dark:border-stone-700 p-2 bg-transparent dark:text-white outline-none" value={formBio} onChange={(e)=>setFormBio(e.target.value)} />
                </div>
 
-               {/* SHOWCASE EDITOR (WITH REMOVE BUTTON 🔴) */}
+               {/* SHOWCASE EDITOR */}
                <div className="bg-white dark:bg-stone-800 p-4 rounded-xl shadow-sm space-y-3">
                    <div className="flex justify-between items-center font-bold dark:text-stone-200">
                        <h3>Showcase</h3>
@@ -280,9 +295,7 @@ export default function App() {
 
                    {formPrefs.showNFTs && formNFTs.map((n,i)=>(
                        <div key={i} className="mt-4 relative bg-stone-50 dark:bg-stone-700/50 p-3 rounded-xl border border-stone-100 dark:border-stone-700">
-                           {/* Remove Button */}
                            <button onClick={() => removeNFT(i)} className="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center shadow-md hover:bg-red-600 transition z-10 font-bold text-xs">✕</button>
-                           
                            <input placeholder="Title" value={n.name} onChange={(e)=>updateNFT(i,'name',e.target.value)} className="w-full mb-2 p-1 bg-transparent dark:text-white rounded text-sm border-b border-transparent focus:border-stone-300 outline-none font-bold"/>
                            <input placeholder="Image URL" value={n.imageUrl} onChange={(e)=>updateNFT(i,'imageUrl',e.target.value)} className="w-full p-1 bg-transparent dark:text-blue-300 text-xs text-blue-600 rounded outline-none font-mono"/>
                        </div>
@@ -297,14 +310,12 @@ export default function App() {
                    </button>
                </div>
 
-               {/* BUILDER EDITOR (WITH REMOVE BUTTON 🔴) */}
+               {/* BUILDER EDITOR */}
                <div className="bg-white dark:bg-stone-800 p-4 rounded-xl shadow-sm space-y-3">
                    <div className="flex justify-between font-bold dark:text-stone-200"><h3>Built & Collected</h3><input type="checkbox" checked={formPrefs.showProjects} onChange={(e)=>setFormPrefs({...formPrefs, showProjects: e.target.checked})} className="w-5 h-5 accent-purple-600"/></div>
                    {formPrefs.showProjects && formProjects.map((p,i)=>(
                        <div key={i} className="flex flex-col gap-2 mt-4 border-t border-stone-100 dark:border-stone-700 pt-4 relative">
-                           {/* Remove Text Button */}
                            <button onClick={() => removeProject(i)} className="absolute top-4 right-0 text-xs text-red-500 font-bold px-2 py-1 bg-red-50 dark:bg-red-900/20 rounded hover:bg-red-100 transition">Remove</button>
-
                            <input placeholder="Project Name" value={p.name} onChange={(e)=>updateProject(i,'name',e.target.value)} className="w-full p-2 bg-stone-50 dark:bg-stone-700 dark:text-white text-sm rounded outline-none pr-16"/>
                            <input placeholder="Short Description" value={p.description || ''} onChange={(e)=>updateProject(i,'description',e.target.value)} className="w-full p-2 bg-stone-50 dark:bg-stone-700 dark:text-stone-300 text-sm rounded outline-none"/>
                            <div className="relative">
