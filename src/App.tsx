@@ -42,8 +42,7 @@ export default function App() {
             setIsNewUser(true);
             setFormNFTs([
                 { id: 1, name: "Highlight #1", imageUrl: "https://placehold.co/600x600/6b21a8/FFF?text=Art" },
-                { id: 2, name: "Highlight #2", imageUrl: "https://placehold.co/600x600/1e40af/FFF?text=Music" },
-                { id: 3, name: "Highlight #3", imageUrl: "https://placehold.co/600x600/be123c/FFF?text=Photo" }
+                { id: 2, name: "Highlight #2", imageUrl: "https://placehold.co/600x600/1e40af/FFF?text=Music" }
             ]);
             setFormProjects([{ id: 1, name: "Farcaster", symbol: "DEGEN" }]);
         }
@@ -80,13 +79,12 @@ export default function App() {
     else { setProfile(updates); setProfileFid(viewerFid); setIsNewUser(false); setIsEditing(false); setIsSaving(false); }
   };
 
-  // Helper Inputs
   const updateNFT = (i: number, f: 'name'|'imageUrl', v: string) => { const n = [...formNFTs]; n[i] = {...n[i], [f]: v}; setFormNFTs(n); };
   const updateProject = (i: number, f: 'name'|'symbol', v: string) => { const n = [...formProjects]; n[i] = {...n[i], [f]: v}; setFormProjects(n); };
 
-  if (!isSDKLoaded || (!profile && !isNewUser)) return <div className="min-h-screen flex items-center justify-center p-10 animate-pulse text-stone-400">Loading Homepage...</div>;
+  if (!isSDKLoaded || (!profile && !isNewUser)) return <div className="min-h-screen flex items-center justify-center p-10 animate-pulse text-stone-400">Loading...</div>;
 
-  // --- EDITOR ---
+  // --- EDITOR VIEW (Standard) ---
   if (isNewUser || isEditing) {
     return (
       <div className="min-h-screen bg-stone-100 p-4 pb-20 max-w-md mx-auto">
@@ -98,7 +96,7 @@ export default function App() {
                 <textarea placeholder="Bio" className="w-full border-b p-2" value={formBio} onChange={(e)=>setFormBio(e.target.value)} />
             </div>
             <div className="bg-white p-4 rounded-xl shadow-sm space-y-3">
-                <div className="flex justify-between font-bold"><h3>Carousel</h3><input type="checkbox" checked={formPrefs.showNFTs} onChange={(e)=>setFormPrefs({...formPrefs, showNFTs: e.target.checked})} className="w-5 h-5 accent-purple-600"/></div>
+                <div className="flex justify-between font-bold"><h3>Gallery</h3><input type="checkbox" checked={formPrefs.showNFTs} onChange={(e)=>setFormPrefs({...formPrefs, showNFTs: e.target.checked})} className="w-5 h-5 accent-purple-600"/></div>
                 {formPrefs.showNFTs && formNFTs.map((n,i)=><div key={i} className="mt-2"><input placeholder="Title" value={n.name} onChange={(e)=>updateNFT(i,'name',e.target.value)} className="w-full mb-1 p-1 bg-stone-50 text-sm"/><input placeholder="Image URL" value={n.imageUrl} onChange={(e)=>updateNFT(i,'imageUrl',e.target.value)} className="w-full p-1 bg-stone-50 text-xs text-blue-600"/></div>)}
             </div>
             <div className="bg-white p-4 rounded-xl shadow-sm space-y-3">
@@ -114,61 +112,50 @@ export default function App() {
     );
   }
 
-  // --- HOMEPAGE VIEW (Fixed) ---
+  // --- HOMEPAGE VIEW (Safe Modern Theme) ---
   const isOwner = viewerFid === profileFid;
 
   return (
-    <div className="min-h-screen bg-stone-50 font-sans text-stone-900 pb-24 overflow-x-hidden">
+    <div className="min-h-screen bg-stone-50 font-sans text-stone-900 pb-24">
       
-      {/* 1. HERO BANNER - Fixed Height, Z-index */}
-      <div className="relative mb-16 w-full">
-        <div className="h-32 w-full bg-purple-600 absolute top-0 left-0 z-0"></div>
-        
-        {/* Buttons */}
-        <div className="absolute top-4 right-4 z-10">
-            {isOwner ? (
-            <button onClick={startEditing} className="bg-black/20 backdrop-blur text-white px-3 py-1 rounded-full text-xs font-bold border border-white/30">Edit Page</button>
-            ) : (
-            <button onClick={goHome} className="bg-white text-stone-800 px-3 py-1 rounded-full text-xs font-bold shadow-sm">🏠 Create Yours</button>
-            )}
-        </div>
+      {/* 1. HERO BANNER - Standard Block (No Absolute) */}
+      {/* This creates the purple top section. User info will be 'pulled up' onto it. */}
+      <div className="h-40 w-full bg-gradient-to-r from-purple-600 to-blue-600 flex items-start justify-end p-4">
+        {/* EDIT BUTTON (Inside the banner) */}
+        {isOwner ? (
+            <button onClick={startEditing} className="bg-black/20 text-white px-4 py-1.5 rounded-full text-xs font-bold border border-white/30 backdrop-blur-md">Edit Page</button>
+        ) : (
+            <button onClick={goHome} className="bg-white text-stone-900 px-4 py-1.5 rounded-full text-xs font-bold shadow-sm">🏠 Create Yours</button>
+        )}
+      </div>
 
+      {/* 2. IDENTITY CARD - Pulled up with Negative Margin (-mt-16) */}
+      <div className="px-6 -mt-16 mb-8">
         {/* Avatar */}
-        <div className="absolute top-20 left-6 z-10">
-            <div className="w-24 h-24 rounded-2xl bg-white p-1 shadow-lg rotate-3">
-                <div className="w-full h-full bg-stone-200 rounded-xl flex items-center justify-center text-4xl overflow-hidden">
-                   👤
-                </div>
+        <div className="w-28 h-28 rounded-2xl bg-white p-1.5 shadow-xl rotate-2 mb-4">
+            <div className="w-full h-full bg-stone-100 rounded-xl flex items-center justify-center text-5xl overflow-hidden">
+                👤
             </div>
         </div>
+        
+        {/* Text */}
+        <h1 className="text-4xl font-black text-stone-900 tracking-tight">{profile?.name}</h1>
+        <p className="text-stone-500 mt-2 text-lg leading-relaxed max-w-sm">{profile?.bio}</p>
       </div>
 
-      {/* 2. TEXT INFO */}
-      <div className="px-6 mb-8 relative z-0">
-        <h1 className="text-3xl font-black text-stone-900 tracking-tight mt-2">{profile?.name}</h1>
-        <p className="text-stone-500 mt-1 text-lg leading-relaxed">{profile?.bio}</p>
-      </div>
-
-      {/* 3. ROBUST CAROUSEL */}
+      {/* 3. CLEAN GALLERY (Standard Grid, No Text Overlay) */}
       {profile?.preferences?.showNFTs && (
-        <section className="mb-8">
-          <div className="px-6 mb-3 flex items-center justify-between">
-             <h2 className="text-sm font-bold text-stone-400 uppercase tracking-wider">Showcase</h2>
-             <span className="text-xs text-stone-300">Swipe ➔</span>
-          </div>
+        <section className="px-6 mb-10">
+          <h2 className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-4">Collection</h2>
           
-          {/* Force Flex Row and No Wrap */}
-          <div className="flex flex-row flex-nowrap overflow-x-auto snap-x snap-mandatory gap-4 px-6 pb-4 w-full">
+          {/* Working Grid, but rounded corners and shadows */}
+          <div className="grid grid-cols-2 gap-4">
             {profile?.nfts?.map((nft, i) => (
-              // Use min-w-[85vw] (85% of viewport width) to force horizontal layout
-              <div key={i} className="snap-center shrink-0 min-w-[85vw] aspect-[4/5] bg-white rounded-2xl shadow-md overflow-hidden relative border border-stone-100">
-                <img src={nft.imageUrl} alt={nft.name} className="w-full h-full object-cover" />
-                <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-4 pt-12">
-                   <p className="text-white font-bold truncate">{nft.name}</p>
-                </div>
+              <div key={i} className="aspect-square bg-white rounded-2xl shadow-sm border border-stone-100 overflow-hidden relative group">
+                {/* Image takes full space */}
+                <img src={nft.imageUrl} alt={nft.name} className="w-full h-full object-cover transition duration-500 group-hover:scale-110" />
               </div>
             ))}
-            <div className="shrink-0 w-2"></div>
           </div>
         </section>
       )}
@@ -176,17 +163,17 @@ export default function App() {
       {/* 4. PROJECTS */}
       {profile?.preferences?.showProjects && (
         <section className="px-6">
-          <h2 className="text-sm font-bold text-stone-400 uppercase tracking-wider mb-3">Projects</h2>
+          <h2 className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-4">Projects</h2>
           <div className="space-y-3">
             {profile?.projects?.map((project, i) => (
-              <div key={i} className="bg-white p-4 rounded-xl shadow-sm border border-stone-100 flex justify-between items-center transform transition hover:scale-[1.02]">
+              <div key={i} className="bg-white p-4 rounded-xl shadow-sm border border-stone-100 flex justify-between items-center">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold text-sm">
+                    <div className="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center text-purple-600 font-bold">
                         {project.symbol.substring(0,1)}
                     </div>
                     <span className="font-bold text-stone-800">{project.name}</span>
                 </div>
-                <span className="bg-stone-100 text-stone-600 px-3 py-1 rounded-full text-xs font-bold border border-stone-200">{project.symbol}</span>
+                <span className="bg-stone-50 text-stone-500 px-3 py-1 rounded-full text-xs font-bold border border-stone-200">{project.symbol}</span>
               </div>
             ))}
           </div>
@@ -194,8 +181,8 @@ export default function App() {
       )}
 
       {isOwner && (
-        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-20 w-full max-w-xs">
-            <button onClick={shareProfile} className="w-full bg-stone-900 text-white py-3 rounded-full font-bold shadow-2xl hover:bg-stone-800 transition flex items-center justify-center gap-2">
+        <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-20 w-full max-w-xs">
+            <button onClick={shareProfile} className="w-full bg-stone-900 text-white py-4 rounded-2xl font-bold shadow-2xl hover:bg-stone-800 transition flex items-center justify-center gap-2 text-lg">
                 🚀 Share Homepage
             </button>
         </div>
