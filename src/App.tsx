@@ -17,6 +17,7 @@ interface Preferences {
   showNFTs: boolean; 
   showProjects: boolean; 
   theme: 'farcaster' | 'sunset' | 'ocean' | 'forest' | 'midnight';
+  font: 'modern' | 'classic' | 'coder' | 'round';
   darkMode: boolean;
   pfpUrl?: string;
 }
@@ -39,6 +40,13 @@ const THEMES = {
   midnight:  { name: 'Midnight',  gradient: 'from-slate-900 to-slate-700',   button: 'bg-slate-800',  accent: 'text-slate-800',  darkAccent: 'text-slate-400' }
 };
 
+const FONTS = {
+  modern:  { name: 'Modern',  class: 'font-sans' },
+  classic: { name: 'Classic', class: 'font-serif' },
+  coder:   { name: 'Coder',   class: 'font-mono' },
+  round:   { name: 'Playful', class: 'font-round' },
+};
+
 export default function App() {
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -47,25 +55,29 @@ export default function App() {
   
   const [isNewUser, setIsNewUser] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  // NEW: Track if we should show the "Welcome" screen
   const [showLanding, setShowLanding] = useState(false);
   
   const [formName, setFormName] = useState("");
   const [formBio, setFormBio] = useState("");
   const [formNFTs, setFormNFTs] = useState<NFT[]>([]);
   const [formProjects, setFormProjects] = useState<Project[]>([]);
-  const [formPrefs, setFormPrefs] = useState<Preferences>({ showNFTs: true, showProjects: true, theme: 'farcaster', darkMode: false });
+  
+  const [formPrefs, setFormPrefs] = useState<Preferences>({ 
+      showNFTs: true, 
+      showProjects: true, 
+      theme: 'farcaster', 
+      font: 'modern', 
+      darkMode: false 
+  });
   
   const [isSaving, setIsSaving] = useState(false);
   const [loadingImageFor, setLoadingImageFor] = useState<number | null>(null);
 
-  // --- INIT LOGIC ---
   useEffect(() => {
     const init = async () => {
       const context = await sdk.context;
       const currentViewerFid = context?.user?.fid || 999; 
       const fcUser = context?.user;
-      
       setViewerFid(currentViewerFid);
 
       const params = new URLSearchParams(window.location.search);
@@ -77,11 +89,9 @@ export default function App() {
 
       if (error || !data) {
         if (targetFid === currentViewerFid) {
-            // It's ME, and I have no profile.
             setIsNewUser(true);
-            setShowLanding(true); // <--- SHOW LANDING PAGE INSTEAD OF FORM
+            setShowLanding(true);
             
-            // PRE-FILL DATA (Ready for when they click "Start")
             if (fcUser?.displayName) setFormName(fcUser.displayName);
             if (fcUser?.pfpUrl) {
                 setFormPrefs(prev => ({ ...prev, pfpUrl: fcUser.pfpUrl }));
@@ -104,7 +114,6 @@ export default function App() {
     if (sdk && !isSDKLoaded) init();
   }, [isSDKLoaded]);
 
-  // --- ACTIONS ---
   const startEditing = () => {
     if (profile) {
       setFormName(profile.name); 
@@ -116,6 +125,7 @@ export default function App() {
         showNFTs: true, 
         showProjects: true, 
         theme: 'farcaster', 
+        font: 'modern',
         darkMode: false,
         pfpUrl: undefined 
       };
@@ -125,11 +135,7 @@ export default function App() {
     }
   };
 
-  // NEW: Start Creating (from Landing Page)
-  const handleStartCreate = () => {
-    setShowLanding(false); // Hide welcome screen
-    setIsEditing(true);    // Show editor
-  };
+  const handleStartCreate = () => { setShowLanding(false); setIsEditing(true); };
 
   const shareProfile = useCallback(() => {
     const appUrl = `https://showcase-test-tau.vercel.app/?fid=${viewerFid}`; 
@@ -137,12 +143,7 @@ export default function App() {
     sdk.actions.openUrl(`https://warpcast.com/~/compose?text=${encodeURIComponent(shareText)}&embeds[]=${encodeURIComponent(appUrl)}`);
   }, [viewerFid]);
 
-  // Updated: "Create Yours" just redirects to the app without params, triggering the "New User" flow
-  const handleCreateYours = () => {
-      // We essentially want to reload the app as "Me"
-      // In a real browser we'd redirect, but in a frame we can just reset state
-      window.location.href = window.location.pathname; 
-  };
+  const handleCreateYours = () => { window.location.href = window.location.pathname; };
 
   const handleSaveProfile = async () => {
     setIsSaving(true);
@@ -154,11 +155,25 @@ export default function App() {
 
   const updateNFT = (i: number, f: 'name'|'imageUrl', v: string) => { const n = [...formNFTs]; n[i] = {...n[i], [f]: v}; setFormNFTs(n); };
   
+  // NEW: Remove NFT 🗑️
+  const removeNFT = (index: number) => {
+    const n = [...formNFTs];
+    n.splice(index, 1);
+    setFormNFTs(n);
+  };
+
   const updateProject = (i: number, f: keyof Project, v: string) => { 
       const n = [...formProjects]; 
       // @ts-ignore
       n[i] = {...n[i], [f]: v}; 
       setFormProjects(n); 
+  };
+
+  // NEW: Remove Project 🗑️
+  const removeProject = (index: number) => {
+    const n = [...formProjects];
+    n.splice(index, 1);
+    setFormProjects(n);
   };
 
   const autoFillImage = async (index: number, rawUrl: string) => {
@@ -179,50 +194,42 @@ export default function App() {
 
   if (!isSDKLoaded || (!profile && !isNewUser)) return <div className="min-h-screen flex items-center justify-center p-10 animate-pulse text-stone-400">Loading Homepage...</div>;
 
-  // --- HELPERS ---
   const currentThemeKey = (profile?.preferences?.theme || 'farcaster') as keyof typeof THEMES;
   const currentTheme = THEMES[currentThemeKey];
   const isDarkMode = profile?.preferences?.darkMode || false;
   const isOwner = viewerFid === profileFid;
-  
   const profileImage = profile?.preferences?.pfpUrl;
+  const currentFontKey = (profile?.preferences?.font || 'modern') as keyof typeof FONTS;
+  const currentFontClass = FONTS[currentFontKey].class;
 
-  // --- LANDING PAGE (WELCOME SCREEN) ---
+  // --- WELCOME SCREEN ---
   if (isNewUser && showLanding) {
       return (
-        <div className="min-h-screen bg-stone-50 dark:bg-stone-950 flex flex-col items-center justify-center p-6 text-center transition-colors">
-            <div className="w-24 h-24 bg-gradient-to-br from-violet-600 to-indigo-600 rounded-3xl shadow-xl flex items-center justify-center mb-8 rotate-3">
-                <span className="text-5xl">🏠</span>
-            </div>
-            <h1 className="text-3xl font-black text-stone-900 dark:text-white mb-4 tracking-tight">Your Onchain Home</h1>
-            <p className="text-stone-500 dark:text-stone-400 text-lg mb-10 max-w-xs leading-relaxed">
-                Showcase your NFTs, favorite frames, and projects in one beautiful place.
-            </p>
-            <button 
-                onClick={handleStartCreate}
-                className="w-full max-w-xs bg-stone-900 dark:bg-white text-white dark:text-stone-900 py-4 rounded-2xl font-bold shadow-lg text-lg hover:scale-105 transition-transform"
-            >
-                Create Homepage
-            </button>
-            <div className="mt-8 flex gap-2 justify-center">
-                {/* Tiny preview circles/mockup */}
-                <div className="w-2 h-2 rounded-full bg-stone-300 dark:bg-stone-700"></div>
-                <div className="w-2 h-2 rounded-full bg-stone-300 dark:bg-stone-700"></div>
-                <div className="w-2 h-2 rounded-full bg-stone-300 dark:bg-stone-700"></div>
+        <div className={`min-h-screen flex flex-col items-center justify-center p-6 text-center transition-colors font-sans bg-stone-50 dark:bg-stone-950 ${isDarkMode ? 'dark' : ''}`}>
+            <div className="w-full max-w-md mx-auto">
+                <div className="w-24 h-24 bg-gradient-to-br from-violet-600 to-indigo-600 rounded-3xl shadow-xl flex items-center justify-center mb-8 rotate-3 mx-auto">
+                    <span className="text-5xl">🏠</span>
+                </div>
+                <h1 className="text-3xl font-black text-stone-900 dark:text-white mb-4 tracking-tight">Your Onchain Home</h1>
+                <p className="text-stone-500 dark:text-stone-400 text-lg mb-10 max-w-xs mx-auto leading-relaxed">
+                    Showcase your NFTs, favorite frames, and projects in one beautiful place.
+                </p>
+                <button onClick={handleStartCreate} className="w-full max-w-xs bg-stone-900 dark:bg-white text-white dark:text-stone-900 py-4 rounded-2xl font-bold shadow-lg text-lg hover:scale-105 transition-transform">
+                    Create Homepage
+                </button>
             </div>
         </div>
       );
   }
 
-  // --- MAIN RENDER ---
+  // --- MAIN APP ---
   return (
-    <div className={isDarkMode ? 'dark' : ''}>
-      <div className="min-h-screen bg-stone-50 dark:bg-stone-950 font-sans text-stone-900 dark:text-stone-100 pb-24 transition-colors duration-500">
+    <div className={`${isDarkMode ? 'dark' : ''} ${currentFontClass}`}>
+      <div className="min-h-screen bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 pb-24 transition-colors duration-500">
         
         {/* --- EDITOR OVERLAY --- */}
-        {/* Only show if we are NOT on the landing page */}
         {(!showLanding && (isNewUser || isEditing)) && (
-          <div className="fixed inset-0 z-50 bg-stone-100 dark:bg-stone-900 overflow-y-auto p-4 pb-20">
+          <div className="fixed inset-0 z-50 bg-stone-100 dark:bg-stone-900 overflow-y-auto p-4 pb-20 font-sans">
             <div className="max-w-md mx-auto space-y-6">
                <h1 className="text-2xl font-bold mb-6 text-center dark:text-white">{isEditing ? "Edit Homepage" : "Create Homepage"}</h1>
                
@@ -240,8 +247,18 @@ export default function App() {
                         ))}
                     </div>
                   </div>
+
+                  <div className="border-t border-stone-100 dark:border-stone-700 pt-4">
+                    <h3 className="font-bold text-stone-800 dark:text-stone-200 mb-2">Typography</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                        {(Object.keys(FONTS) as Array<keyof typeof FONTS>).map((fontKey) => (
+                            <button key={fontKey} onClick={() => setFormPrefs({...formPrefs, font: fontKey})} className={`py-2 px-3 rounded-lg border text-sm transition-all ${FONTS[fontKey].class} ${formPrefs.font === fontKey ? 'bg-purple-50 border-purple-500 text-purple-700 dark:bg-stone-700 dark:border-white dark:text-white' : 'bg-stone-50 border-stone-200 text-stone-500 dark:bg-stone-900 dark:border-stone-700 dark:text-stone-400'}`}>{FONTS[fontKey].name}</button>
+                        ))}
+                    </div>
+                  </div>
                </div>
 
+               {/* IDENTITY */}
                <div className="bg-white dark:bg-stone-800 p-4 rounded-xl shadow-sm space-y-3">
                    <h3 className="font-bold dark:text-stone-200">Identity</h3>
                    <div className="flex gap-3 items-center mb-2">
@@ -250,23 +267,45 @@ export default function App() {
                        </div>
                        <input type="text" placeholder="Profile Picture URL" className="flex-1 border-b dark:border-stone-700 p-2 bg-transparent dark:text-white outline-none text-xs" value={formPrefs.pfpUrl || ''} onChange={(e)=>setFormPrefs({...formPrefs, pfpUrl: e.target.value})} />
                    </div>
-
                    <input type="text" placeholder="Name" className="w-full border-b dark:border-stone-700 p-2 bg-transparent dark:text-white outline-none" value={formName} onChange={(e)=>setFormName(e.target.value)} />
                    <textarea placeholder="Bio" className="w-full border-b dark:border-stone-700 p-2 bg-transparent dark:text-white outline-none" value={formBio} onChange={(e)=>setFormBio(e.target.value)} />
                </div>
 
-               {/* SHOWCASE SECTION */}
+               {/* SHOWCASE EDITOR (WITH REMOVE BUTTON 🔴) */}
                <div className="bg-white dark:bg-stone-800 p-4 rounded-xl shadow-sm space-y-3">
-                   <div className="flex justify-between font-bold dark:text-stone-200"><h3>Showcase</h3><input type="checkbox" checked={formPrefs.showNFTs} onChange={(e)=>setFormPrefs({...formPrefs, showNFTs: e.target.checked})} className="w-5 h-5 accent-purple-600"/></div>
-                   {formPrefs.showNFTs && formNFTs.map((n,i)=><div key={i} className="mt-2"><input placeholder="Title" value={n.name} onChange={(e)=>updateNFT(i,'name',e.target.value)} className="w-full mb-1 p-1 bg-stone-50 dark:bg-stone-700 dark:text-white rounded text-sm"/><input placeholder="Image URL" value={n.imageUrl} onChange={(e)=>updateNFT(i,'imageUrl',e.target.value)} className="w-full p-1 bg-stone-50 dark:bg-stone-700 dark:text-blue-300 text-xs text-blue-600 rounded"/></div>)}
+                   <div className="flex justify-between items-center font-bold dark:text-stone-200">
+                       <h3>Showcase</h3>
+                       <input type="checkbox" checked={formPrefs.showNFTs} onChange={(e)=>setFormPrefs({...formPrefs, showNFTs: e.target.checked})} className="w-5 h-5 accent-purple-600"/>
+                   </div>
+
+                   {formPrefs.showNFTs && formNFTs.map((n,i)=>(
+                       <div key={i} className="mt-4 relative bg-stone-50 dark:bg-stone-700/50 p-3 rounded-xl border border-stone-100 dark:border-stone-700">
+                           {/* Remove Button */}
+                           <button onClick={() => removeNFT(i)} className="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center shadow-md hover:bg-red-600 transition z-10 font-bold text-xs">✕</button>
+                           
+                           <input placeholder="Title" value={n.name} onChange={(e)=>updateNFT(i,'name',e.target.value)} className="w-full mb-2 p-1 bg-transparent dark:text-white rounded text-sm border-b border-transparent focus:border-stone-300 outline-none font-bold"/>
+                           <input placeholder="Image URL" value={n.imageUrl} onChange={(e)=>updateNFT(i,'imageUrl',e.target.value)} className="w-full p-1 bg-transparent dark:text-blue-300 text-xs text-blue-600 rounded outline-none font-mono"/>
+                       </div>
+                   ))}
+                   
+                   <button 
+                       className="w-full py-2 bg-stone-100 dark:bg-stone-700 text-stone-500 dark:text-stone-300 text-sm font-bold rounded-lg mt-2 disabled:opacity-50 disabled:cursor-not-allowed" 
+                       onClick={() => setFormNFTs([...formNFTs, { id: Date.now(), name: "", imageUrl: "" }])}
+                       disabled={formNFTs.length >= 6}
+                   >
+                       {formNFTs.length >= 6 ? "Max Limit Reached (6/6)" : `+ Add Image (${formNFTs.length}/6)`}
+                   </button>
                </div>
 
-               {/* BUILDER SECTION */}
+               {/* BUILDER EDITOR (WITH REMOVE BUTTON 🔴) */}
                <div className="bg-white dark:bg-stone-800 p-4 rounded-xl shadow-sm space-y-3">
                    <div className="flex justify-between font-bold dark:text-stone-200"><h3>Built & Collected</h3><input type="checkbox" checked={formPrefs.showProjects} onChange={(e)=>setFormPrefs({...formPrefs, showProjects: e.target.checked})} className="w-5 h-5 accent-purple-600"/></div>
                    {formPrefs.showProjects && formProjects.map((p,i)=>(
-                       <div key={i} className="flex flex-col gap-2 mt-4 border-t border-stone-100 dark:border-stone-700 pt-4">
-                           <input placeholder="Project Name" value={p.name} onChange={(e)=>updateProject(i,'name',e.target.value)} className="w-full p-2 bg-stone-50 dark:bg-stone-700 dark:text-white text-sm rounded outline-none"/>
+                       <div key={i} className="flex flex-col gap-2 mt-4 border-t border-stone-100 dark:border-stone-700 pt-4 relative">
+                           {/* Remove Text Button */}
+                           <button onClick={() => removeProject(i)} className="absolute top-4 right-0 text-xs text-red-500 font-bold px-2 py-1 bg-red-50 dark:bg-red-900/20 rounded hover:bg-red-100 transition">Remove</button>
+
+                           <input placeholder="Project Name" value={p.name} onChange={(e)=>updateProject(i,'name',e.target.value)} className="w-full p-2 bg-stone-50 dark:bg-stone-700 dark:text-white text-sm rounded outline-none pr-16"/>
                            <input placeholder="Short Description" value={p.description || ''} onChange={(e)=>updateProject(i,'description',e.target.value)} className="w-full p-2 bg-stone-50 dark:bg-stone-700 dark:text-stone-300 text-sm rounded outline-none"/>
                            <div className="relative">
                                <input placeholder="Link URL" value={p.url || ''} onChange={(e)=>updateProject(i,'url',e.target.value)} onBlur={(e) => autoFillImage(i, e.target.value)} className="w-full p-2 bg-stone-50 dark:bg-stone-700 dark:text-blue-300 text-xs text-blue-600 rounded outline-none font-mono"/>
@@ -291,44 +330,37 @@ export default function App() {
           {isOwner && (
               <button onClick={startEditing} className="bg-black/20 text-white px-4 py-1.5 rounded-full text-xs font-bold border border-white/30 backdrop-blur-md hover:bg-black/30 transition">Edit Page</button>
           )}
-          {/* NOTE: We removed the "Create Yours" button from top right because it will be the big button at bottom now */}
         </div>
 
         <div className="mx-4 -mt-20 mb-8 relative z-10">
           <div className="bg-white/80 dark:bg-stone-900/80 backdrop-blur-xl border border-white/50 dark:border-stone-700 p-6 rounded-3xl shadow-xl flex flex-col items-center text-center transition-colors">
-              
-              {/* PROFILE PICTURE */}
               <div className="w-24 h-24 -mt-16 rounded-2xl bg-white dark:bg-stone-800 p-1 shadow-lg rotate-3 mb-3">
                   <div className="w-full h-full bg-stone-100 dark:bg-stone-700 rounded-xl flex items-center justify-center text-4xl overflow-hidden">
-                      {profileImage ? (
-                          <img src={profileImage} alt="Profile" className="w-full h-full object-cover"/>
-                      ) : (
-                          <span>👤</span>
-                      )}
+                      {profileImage ? (<img src={profileImage} alt="Profile" className="w-full h-full object-cover"/>) : (<span>👤</span>)}
                   </div>
               </div>
-
               <h1 className="text-3xl font-black text-stone-900 dark:text-white tracking-tight">{profile?.name}</h1>
               <p className="text-stone-500 dark:text-stone-400 mt-2 text-base leading-relaxed max-w-xs">{profile?.bio}</p>
           </div>
         </div>
 
+        {/* --- SHOWCASE RENDERER --- */}
         {profile?.preferences?.showNFTs && (
-          <section className="px-6 mb-10">
-            <h2 className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-4 ml-1">Showcase</h2>
+          <section className="px-6 mb-10 overflow-hidden">
+            <h2 className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-4 ml-1 opacity-70">Showcase</h2>
             <div className="grid grid-cols-2 gap-4">
-              {profile?.nfts?.map((nft, i) => (
-                <div key={i} className="aspect-square bg-white dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-100 dark:border-stone-800 p-2 relative">
-                  <img src={nft.imageUrl} alt={nft.name} className="w-full h-full object-contain rounded-lg bg-stone-50 dark:bg-stone-800" />
-                </div>
-              ))}
+                {profile?.nfts?.map((nft, i) => (
+                    <div key={i} className="aspect-square bg-white dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-100 dark:border-stone-800 p-2 relative">
+                        <img src={nft.imageUrl} alt={nft.name} className="w-full h-full object-contain rounded-lg bg-stone-50 dark:bg-stone-800" />
+                    </div>
+                ))}
             </div>
           </section>
         )}
 
         {profile?.preferences?.showProjects && (
           <section className="px-6">
-            <h2 className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-4 ml-1">Built & Collected</h2>
+            <h2 className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-4 ml-1 opacity-70">Built & Collected</h2>
             <div className="space-y-4">
               {profile?.projects?.map((project, i) => (
                 <div key={i} onClick={() => openProject(project.url)} className="bg-white dark:bg-stone-900 p-4 rounded-2xl shadow-sm border border-stone-100 dark:border-stone-800 flex items-center gap-4 active:scale-95 transition cursor-pointer hover:border-purple-200 dark:hover:border-stone-600">
@@ -349,14 +381,12 @@ export default function App() {
           </section>
         )}
 
-        {/* BOTTOM FLOATING BUTTON: Smart Logic 🧠 */}
         <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-20 w-full max-w-xs">
             {isOwner ? (
                 <button onClick={shareProfile} className={`w-full text-white py-4 rounded-2xl font-bold shadow-2xl hover:brightness-110 transition flex items-center justify-center gap-2 text-lg ${currentTheme.button}`}>
                     🚀 Share Homepage
                 </button>
             ) : (
-                /* VIEWER sees this instead! */
                 <button onClick={handleCreateYours} className="w-full bg-stone-900 dark:bg-white text-white dark:text-stone-900 py-4 rounded-2xl font-bold shadow-2xl hover:scale-105 transition flex items-center justify-center gap-2 text-lg">
                     ✨ Create Your Homepage
                 </button>

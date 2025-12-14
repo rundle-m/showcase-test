@@ -6,7 +6,14 @@ export default {
   ],
   darkMode: 'class', // <--- THIS IS THE NEW LINE
   theme: {
-    extend: {},
+    extend: {
+      fontFamily: {
+        sans: ['Inter', 'sans-serif'],
+        serif: ['"Playfair Display"', 'serif'],
+        mono: ['"Space Mono"', 'monospace'],
+        round: ['"Varela Round"', 'sans-serif'],
+      },
+    },
   },
   plugins: [],
 }
