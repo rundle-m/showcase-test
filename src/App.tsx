@@ -88,7 +88,7 @@ export default function App() {
 
   if (!isSDKLoaded || (!profile && !isNewUser)) return <div className="min-h-screen flex items-center justify-center p-10 animate-pulse text-stone-400">Loading Homepage...</div>;
 
-  // --- EDITOR VIEW ---
+  // --- EDITOR VIEW (Standard) ---
   if (isNewUser || isEditing) {
     return (
       <div className="min-h-screen bg-stone-100 p-4 pb-20 max-w-md mx-auto">
@@ -116,47 +116,45 @@ export default function App() {
     );
   }
 
-  // --- HOMEPAGE VIEW (RAW CSS STYLE) ---
+  // --- HOMEPAGE VIEW (TAILWIND POLISH) ---
   const isOwner = viewerFid === profileFid;
 
   return (
     <div className="min-h-screen bg-stone-50 font-sans text-stone-900 pb-24">
       
-      {/* 1. HERO BANNER - RAW CSS COLOR */}
-      <div style={{ backgroundColor: '#7c3aed', height: '160px', width: '100%', display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', padding: '16px' }}>
+      {/* 1. HERO BANNER - Now using Real Gradients! */}
+      <div className="h-48 w-full bg-gradient-to-r from-violet-600 to-indigo-600 flex items-start justify-end p-4">
         {isOwner ? (
-            <button onClick={startEditing} className="bg-black/20 text-white px-4 py-1.5 rounded-full text-xs font-bold border border-white/30 backdrop-blur-md">Edit Page</button>
+            <button onClick={startEditing} className="bg-black/20 text-white px-4 py-1.5 rounded-full text-xs font-bold border border-white/30 backdrop-blur-md hover:bg-black/30 transition">Edit Page</button>
         ) : (
             <button onClick={goHome} className="bg-white text-stone-900 px-4 py-1.5 rounded-full text-xs font-bold shadow-sm">🏠 Create Yours</button>
         )}
       </div>
 
-      {/* 2. IDENTITY CARD */}
-      <div className="px-6 -mt-16 mb-8 relative z-10">
-        <div className="w-28 h-28 rounded-2xl bg-white p-1.5 shadow-xl rotate-2 mb-4">
-            <div className="w-full h-full bg-stone-100 rounded-xl flex items-center justify-center text-5xl overflow-hidden">
-                👤
+      {/* 2. IDENTITY CARD - GLASSMORPHISM 💎 */}
+      <div className="mx-4 -mt-20 mb-8 relative z-10">
+        <div className="bg-white/80 backdrop-blur-xl border border-white/50 p-6 rounded-3xl shadow-xl flex flex-col items-center text-center">
+            {/* Avatar */}
+            <div className="w-24 h-24 -mt-16 rounded-2xl bg-white p-1 shadow-lg rotate-3 mb-3">
+                <div className="w-full h-full bg-stone-100 rounded-xl flex items-center justify-center text-4xl overflow-hidden">
+                    👤
+                </div>
             </div>
+            {/* Name & Bio */}
+            <h1 className="text-3xl font-black text-stone-900 tracking-tight">{profile?.name}</h1>
+            <p className="text-stone-500 mt-2 text-base leading-relaxed max-w-xs">{profile?.bio}</p>
         </div>
-        <h1 className="text-4xl font-black text-stone-900 tracking-tight leading-tight">{profile?.name}</h1>
-        <p className="text-stone-500 mt-2 text-lg leading-relaxed">{profile?.bio}</p>
       </div>
 
-      {/* 3. GALLERY - RAW CSS GRID */}
+      {/* 3. GALLERY - PURE TAILWIND GRID */}
       {profile?.preferences?.showNFTs && (
         <section className="px-6 mb-10">
-          <h2 className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-4">Collection</h2>
+          <h2 className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-4 ml-1">Showcase</h2>
           
-          {/* RAW CSS GRID EXPLANATION:
-              display: grid -> Turn on grid mode
-              gridTemplateColumns: 1fr 1fr -> Create exactly two columns of equal width
-              gap: 16px -> Space them out
-          */}
-          
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', width: '100%' }}>
+          <div className="grid grid-cols-2 gap-4">
             {profile?.nfts?.map((nft, i) => (
-              <div key={i} className="aspect-square bg-white rounded-2xl shadow-sm border border-stone-100 overflow-hidden relative">
-                <img src={nft.imageUrl} alt={nft.name} className="w-full h-full object-cover" />
+              <div key={i} className="aspect-square bg-white rounded-2xl shadow-sm border border-stone-100 p-2 relative">
+                <img src={nft.imageUrl} alt={nft.name} className="w-full h-full object-contain rounded-lg bg-stone-50" />
               </div>
             ))}
           </div>
@@ -166,12 +164,12 @@ export default function App() {
       {/* 4. PROJECTS */}
       {profile?.preferences?.showProjects && (
         <section className="px-6">
-          <h2 className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-4">Projects</h2>
+          <h2 className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-4 ml-1">Projects</h2>
           <div className="space-y-3">
             {profile?.projects?.map((project, i) => (
-              <div key={i} className="bg-white p-4 rounded-xl shadow-sm border border-stone-100 flex justify-between items-center">
+              <div key={i} className="bg-white p-4 rounded-2xl shadow-sm border border-stone-100 flex justify-between items-center transform transition hover:scale-[1.02] active:scale-95">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center text-purple-600 font-bold">
+                    <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold border border-indigo-100">
                         {project.symbol.substring(0,1)}
                     </div>
                     <span className="font-bold text-stone-800">{project.name}</span>
