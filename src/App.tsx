@@ -48,28 +48,12 @@ export default function App() {
   const [walletNFTs, setWalletNFTs] = useState<any[]>([]); 
   const [isLoadingNFTs, setIsLoadingNFTs] = useState(false);
 
-  // NEW: State to hold the Alchemy instance safely
-  const [alchemyInstance, setAlchemyInstance] = useState<Alchemy | null>(null);
-
   useEffect(() => {
-    // 1. CALL READY INSTANTLY (Top Priority)
-    // We wrap this in a try-catch to ensure it runs even if SDK is weird
-    try {
-        sdk.actions.ready();
-    } catch (e) {
-        console.error("SDK Ready failed:", e);
-    }
-
     const init = async () => {
       try {
-        // 2. Initialize Alchemy safely inside the effect
-        const apiKey = import.meta.env.VITE_ALCHEMY_KEY;
-        if (apiKey) {
-            const config = { apiKey, network: Network.BASE_MAINNET };
-            setAlchemyInstance(new Alchemy(config));
-        } else {
-            console.warn("Alchemy Key missing - Wallet features will be disabled.");
-        }
+        // 1. TELL FARCASTER WE ARE READY INSTANTLY ⚡️
+        // This is critical. We call this before anything else.
+        sdk.actions.ready(); 
 
         const context = await sdk.context;
         const currentViewerFid = context?.user?.fid || 999; 
@@ -103,6 +87,8 @@ export default function App() {
       } catch (err: any) {
         console.error("Crash:", err);
         setErrorMsg(err.message || "Unknown error occurred loading the app.");
+        // Even if we crash, tell Farcaster we are ready so the splash screen goes away and shows the error
+        sdk.actions.ready(); 
       }
     };
     init();
@@ -155,18 +141,23 @@ export default function App() {
 
   const openProject = (url: string) => { sdk.actions.openUrl(url); };
 
+  // --- ALCHEMY FETCH LOGIC (INITIALIZED ON DEMAND) 🔮 ---
   const openNFTPicker = async () => {
       setShowNFTPicker(true);
       if (walletNFTs.length > 0) return;
-      
-      // Safety check: Is Alchemy loaded?
-      if (!alchemyInstance) {
-          alert("Wallet connection is not available (Missing API Key).");
+
+      const apiKey = import.meta.env.VITE_ALCHEMY_KEY;
+      if (!apiKey) {
+          alert("Alchemy API Key is missing. Check your .env file or Vercel settings.");
           return;
       }
 
       setIsLoadingNFTs(true);
       try {
+          // Initialize Alchemy HERE, not at the top level
+          const config = { apiKey, network: Network.BASE_MAINNET };
+          const alchemy = new Alchemy(config);
+
           const context = await sdk.context;
           const user = context.user as any; 
           let address = user?.verifications?.[0] || user?.custodyAddress;
@@ -176,7 +167,7 @@ export default function App() {
               if (manualAddress) address = manualAddress;
               else { setShowNFTPicker(false); setIsLoadingNFTs(false); return; }
           }
-          const nfts = await alchemyInstance.nft.getNftsForOwner(address, { pageSize: 50 });
+          const nfts = await alchemy.nft.getNftsForOwner(address, { pageSize: 50 });
           const cleanNFTs = nfts.ownedNfts.filter((nft: any) => nft.media && nft.media.length > 0 && nft.media[0].gateway);
           
           if (cleanNFTs.length === 0) alert("No NFTs with images found on Base for this address.");
