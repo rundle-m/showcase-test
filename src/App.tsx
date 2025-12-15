@@ -47,9 +47,6 @@ export default function App() {
   const [walletNFTs, setWalletNFTs] = useState<any[]>([]); 
   const [isLoadingNFTs, setIsLoadingNFTs] = useState(false);
 
-  // We store the detected address here
-  const [userAddress, setUserAddress] = useState<string | null>(null);
-
   useEffect(() => {
     const init = async () => {
       // 1. INSTANT READY
@@ -64,14 +61,6 @@ export default function App() {
         const context = await sdk.context;
         const currentViewerFid = context?.user?.fid || 999; 
         setViewerFid(currentViewerFid);
-
-        // --- NEW: AUTO-DETECT ADDRESS ---
-        // Farcaster frames give us the user object directly!
-        if (context?.user) {
-            // In V2 SDK, we might need to rely on 'signIn' to get the verified address, 
-            // but often the context provides a username we can look up.
-            // For now, we will try to use the `signIn` action if we need deeper access.
-        }
 
         const params = new URLSearchParams(window.location.search);
         const urlFid = params.get('fid');
@@ -118,20 +107,11 @@ export default function App() {
 
       setIsLoadingNFTs(true);
       try {
-          // 1. Request Sign In
-          // We use a nonce (random string) for security, though we aren't verifying it on a backend yet.
+          // 1. Request Sign In (We ignore the result for now since we don't have a backend to verify it)
           const nonce = Math.random().toString(36).substring(7);
-          const result = await sdk.actions.signIn({ nonce });
+          await sdk.actions.signIn({ nonce }); //
           
-          // 2. If successful, we assume the user is who they say they are.
-          // In a real app with a backend, you would verify 'result.signature' & 'result.message'.
-          // For this client-side demo, we will trust the Context FID or ask for an address if missing.
-          
-          const context = await sdk.context;
-          
-          // Fallback: If we can't get the address from the sign-in result directly (it's inside the message),
-          // we ask the user to paste it ONE time, or we can use the Neynar API (if available) to look it up.
-          // For now, let's try the manual fallback which is 100% reliable without a backend.
+          // 2. Ask user for address (Fallback since we can't decode the signature client-side)
           let address = prompt("Sign In Successful! \n\nTo load your assets, please paste your Ethereum/Base Address:");
           
           if (!address) {
@@ -145,6 +125,7 @@ export default function App() {
           const alchemy = new Alchemy(config);
           
           const nfts = await alchemy.nft.getNftsForOwner(address, { pageSize: 50 });
+          // Use 'as any' here to handle Alchemy's complex type definition if needed, though usually standard filtering works
           const cleanNFTs = nfts.ownedNfts.filter((nft: any) => nft.media && nft.media.length > 0 && nft.media[0].gateway);
           
           if (cleanNFTs.length === 0) alert("No NFTs with images found on Base for this address.");
@@ -296,7 +277,6 @@ export default function App() {
                        ))}
                        <div className="flex gap-2 mt-2">
                            <button className="flex-1 py-2 bg-stone-100 dark:bg-stone-700 text-stone-500 dark:text-stone-300 text-sm font-bold rounded-lg disabled:opacity-50" onClick={() => setFormNFTs([...formNFTs, { id: Date.now(), name: "", imageUrl: "" }])} disabled={formNFTs.length >= 6}>+ Add URL</button>
-                           {/* UPDATED WALLET BUTTON */}
                            <button className="flex-1 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-sm font-bold rounded-lg disabled:opacity-50 flex items-center justify-center gap-1" onClick={handleSignInAndFetch} disabled={formNFTs.length >= 6}>✨ Wallet</button>
                        </div>
                    </div>
