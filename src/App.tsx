@@ -2,6 +2,10 @@ import { useEffect, useState, useCallback } from 'react';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { supabase } from './supabaseClient';
 import { Alchemy, Network } from 'alchemy-sdk';
+import { NeynarAPIClient } from "@neynar/nodejs-sdk";
+
+// --- CONFIG ---
+const neynarClient = new NeynarAPIClient({ apiKey: import.meta.env.VITE_NEYNAR_API_KEY || "NEYNAR_API_DOCS" });
 
 // --- TYPES ---
 interface NFT { id: number; name: string; imageUrl: string; }
@@ -26,6 +30,7 @@ const FONTS = {
 };
 
 export default function App() {
+  // 1. STATE
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [viewerFid, setViewerFid] = useState<number>(0);
@@ -43,8 +48,9 @@ export default function App() {
   
   const [isSaving, setIsSaving] = useState(false);
   const [loadingImageFor, setLoadingImageFor] = useState<number | null>(null);
-  const [isLoggingIn, setIsLoggingIn] = useState(false); // Loading state for login
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
+  // 2. INITIALIZATION
   useEffect(() => {
     const init = async () => {
       try {
@@ -68,15 +74,13 @@ export default function App() {
 
         if (error || !data) {
           if (targetFid === currentViewerFid) {
-            // NEW USER: Show Landing
             setIsNewUser(true);
             setShowLanding(true);
-            // Default Fallbacks
+            // Default fallbacks (if we have context immediately)
             if (fcUser?.displayName) setFormName(fcUser.displayName);
             if (fcUser?.pfpUrl) setFormPrefs(prev => ({ ...prev, pfpUrl: fcUser.pfpUrl }));
           }
         } else {
-          // EXISTING USER: Load Data
           if (targetFid === currentViewerFid && fcUser?.pfpUrl && data.preferences?.pfpUrl !== fcUser.pfpUrl) {
             data.preferences = { ...data.preferences, pfpUrl: fcUser.pfpUrl };
             supabase.from('profiles').update({ preferences: data.preferences }).eq('id', targetFid).then();
@@ -91,75 +95,71 @@ export default function App() {
     init();
   }, [isSDKLoaded]);
 
-  // --- 1. THE "CONNECT IDENTITY" FUNCTION ---
-  // This runs when a NEW user clicks the button on the landing page
+  // 3. SMART CONNECT (Neynar + Alchemy)
   const handleConnectAndFetch = async () => {
       setIsLoggingIn(true);
-      const apiKey = import.meta.env.VITE_ALCHEMY_KEY;
+      const alchemyKey = import.meta.env.VITE_ALCHEMY_KEY;
       
+      if (!alchemyKey) {
+          alert("Missing Alchemy API Key! Check Vercel env vars.");
+          setIsLoggingIn(false);
+          return;
+      }
+
       try {
-          // A. Sign In (Nonce fixed to be > 8 chars)
+          // A. Sign In
           const nonce = Math.random().toString(36).substring(2, 15);
           await sdk.actions.signIn({ nonce }); 
           
-          // B. Get Context again to be sure
+          // B. Get User Context (FID)
           const context = await sdk.context;
-          if (context?.user?.displayName) setFormName(context.user.displayName);
-          if (context?.user?.pfpUrl) setFormPrefs(prev => ({ ...prev, pfpUrl: context.user.pfpUrl }));
+          const userFid = context?.user?.fid;
 
-          // C. Fetch NFTs
-          if (apiKey) {
-              let address = prompt("Login Successful! 🚀\n\nPaste your Wallet Address to auto-load your NFTs:");
-              if (address) await fetchNFTs(address, apiKey);
-          }
+          if (!userFid) throw new Error("Could not get User ID from Farcaster.");
 
-          // D. Start Editing
+          // C. Ask Neynar: "What is this user's address?"
+          const neynarResponse = await neynarClient.fetchBulkUsers({ fids: [userFid] });
+          const neynarUser = neynarResponse.users[0];
+
+          const connectedAddress = neynarUser?.verifications?.[0] || neynarUser?.custody_address;
+
+          if (!connectedAddress) throw new Error("No connected wallet found for this user.");
+
+          // D. Auto-Fill Profile Details
+          if (neynarUser?.display_name) setFormName(neynarUser.display_name);
+          if (neynarUser?.pfp_url) setFormPrefs(prev => ({ ...prev, pfpUrl: neynarUser.pfp_url }));
+          if (neynarUser?.profile?.bio?.text) setFormBio(neynarUser.profile.bio.text);
+
+          // E. Ask Alchemy: "Fetch NFTs"
+          const config = { apiKey: alchemyKey, network: Network.BASE_MAINNET };
+          const alchemy = new Alchemy(config);
+          
+          const nfts = await alchemy.nft.getNftsForOwner(connectedAddress, { pageSize: 50 });
+          const cleanNFTs = nfts.ownedNfts
+              .filter((nft: any) => nft.media && nft.media.length > 0 && nft.media[0].gateway)
+              .map((nft: any) => ({
+                  id: Date.now() + Math.random(),
+                  name: nft.title || "NFT",
+                  imageUrl: nft.media[0].gateway
+              }))
+              .slice(0, 6);
+          
+          if (cleanNFTs.length > 0) setFormNFTs(cleanNFTs);
+          else alert(`Wallet found (${connectedAddress.slice(0,6)}...) but no Base NFTs detected.`);
+
+          // F. Success
           setShowLanding(false);
           setIsEditing(true);
 
       } catch (error: any) { 
-          console.error(error); 
+          console.error(error);
           if (error.name !== 'RejectedByUser') alert(`Error: ${error.message}`);
       } finally { 
           setIsLoggingIn(false); 
       }
   };
 
-  // --- 2. REUSABLE NFT FETCH LOGIC ---
-  const fetchNFTs = async (address: string, apiKey: string) => {
-      const config = { apiKey, network: Network.BASE_MAINNET };
-      const alchemy = new Alchemy(config);
-      const nfts = await alchemy.nft.getNftsForOwner(address, { pageSize: 50 });
-      const cleanNFTs = nfts.ownedNfts
-          .filter((nft: any) => nft.media && nft.media.length > 0 && nft.media[0].gateway)
-          .map((nft: any) => ({
-              id: Date.now() + Math.random(),
-              name: nft.title || "NFT",
-              imageUrl: nft.media[0].gateway
-          }))
-          .slice(0, 6); // Limit to 6
-      
-      if (cleanNFTs.length > 0) setFormNFTs(cleanNFTs);
-      else alert("No NFTs with images found on Base.");
-  };
-
-  // --- 3. EXISTING USER SYNC ---
-  // For users who already have a profile but want to refresh/connect wallet
-  const handleSyncWallet = async () => {
-      const apiKey = import.meta.env.VITE_ALCHEMY_KEY;
-      if (!apiKey) return alert("API Key missing");
-      
-      const address = prompt("Paste your Wallet Address to sync NFTs:");
-      if (address) {
-          setIsLoggingIn(true); // Reuse loading state
-          try {
-              await fetchNFTs(address, apiKey);
-          } catch(e) { alert("Error fetching"); }
-          setIsLoggingIn(false);
-      }
-  };
-
-  // --- ACTIONS ---
+  // 4. OTHER ACTIONS
   const startEditing = () => {
     if (profile) {
       setFormName(profile.name); setFormBio(profile.bio); 
@@ -245,6 +245,7 @@ export default function App() {
                    <h1 className="text-2xl font-bold mb-6 text-center dark:text-white">{isEditing ? "Edit Homepage" : "Create Homepage"}</h1>
                    
                    <div className="bg-white dark:bg-stone-800 p-4 rounded-xl shadow-sm space-y-4">
+                      {/* PREFERENCES */}
                       <div className="flex justify-between items-center"><h3 className="font-bold text-stone-800 dark:text-stone-200">Dark Mode</h3><button onClick={() => setFormPrefs({...formPrefs, darkMode: !formPrefs.darkMode})} className={`w-14 h-8 rounded-full p-1 transition-colors ${formPrefs.darkMode ? 'bg-purple-600' : 'bg-stone-300'}`}><div className={`w-6 h-6 bg-white rounded-full shadow-md transform transition-transform ${formPrefs.darkMode ? 'translate-x-6' : 'translate-x-0'}`} /></button></div>
                       <div className="border-t border-stone-100 dark:border-stone-700 pt-4"><h3 className="font-bold text-stone-800 dark:text-stone-200 mb-2">Banner Image</h3><div className="flex gap-2"><input type="text" placeholder="Paste image URL..." className="flex-1 p-2 bg-stone-50 dark:bg-stone-700 dark:text-white rounded outline-none text-xs border border-transparent focus:border-purple-500" value={formPrefs.bannerUrl || ''} onChange={(e) => setFormPrefs({...formPrefs, bannerUrl: e.target.value})} />{formPrefs.bannerUrl && (<button onClick={() => setFormPrefs({...formPrefs, bannerUrl: undefined})} className="px-3 bg-red-100 text-red-600 rounded text-xs font-bold">Clear</button>)}</div></div>
                       <div className="border-t border-stone-100 dark:border-stone-700 pt-4"><h3 className="font-bold text-stone-800 dark:text-stone-200 mb-2">Background Wallpaper</h3><div className="flex gap-2"><input type="text" placeholder="Paste image URL..." className="flex-1 p-2 bg-stone-50 dark:bg-stone-700 dark:text-white rounded outline-none text-xs border border-transparent focus:border-purple-500" value={formPrefs.backgroundUrl || ''} onChange={(e) => setFormPrefs({...formPrefs, backgroundUrl: e.target.value})} />{formPrefs.backgroundUrl && (<button onClick={() => setFormPrefs({...formPrefs, backgroundUrl: undefined})} className="px-3 bg-red-100 text-red-600 rounded text-xs font-bold">Clear</button>)}</div></div>
@@ -269,8 +270,8 @@ export default function App() {
                        ))}
                        <div className="flex gap-2 mt-2">
                            <button className="flex-1 py-2 bg-stone-100 dark:bg-stone-700 text-stone-500 dark:text-stone-300 text-sm font-bold rounded-lg disabled:opacity-50" onClick={() => setFormNFTs([...formNFTs, { id: Date.now(), name: "", imageUrl: "" }])} disabled={formNFTs.length >= 6}>+ Add URL</button>
-                           {/* SYNC WALLET BUTTON (MOVED HERE) */}
-                           <button className="flex-1 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-sm font-bold rounded-lg disabled:opacity-50 flex items-center justify-center gap-1" onClick={handleSyncWallet} disabled={formNFTs.length >= 6 || isLoggingIn}>✨ Sync Wallet</button>
+                           {/* SYNC WALLET BUTTON (RETAINED FOR EXISTING USERS TO UPDATE) */}
+                           <button className="flex-1 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-sm font-bold rounded-lg disabled:opacity-50 flex items-center justify-center gap-1" onClick={handleConnectAndFetch} disabled={formNFTs.length >= 6 || isLoggingIn}>✨ Sync Wallet</button>
                        </div>
                    </div>
 
