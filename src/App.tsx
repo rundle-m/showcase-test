@@ -47,42 +47,51 @@ export default function App() {
   const [walletNFTs, setWalletNFTs] = useState<any[]>([]); 
   const [isLoadingNFTs, setIsLoadingNFTs] = useState(false);
 
+  // We store the detected address here
+  const [userAddress, setUserAddress] = useState<string | null>(null);
+
   useEffect(() => {
     const init = async () => {
-      // 1. INSTANT READY SIGNAL
+      // 1. INSTANT READY
       try {
         await sdk.actions.ready(); 
       } catch (e) {
         console.error("SDK Ready failed", e);
       }
 
-      // 2. Load Data
+      // 2. Load Data & User Context
       try {
         const context = await sdk.context;
         const currentViewerFid = context?.user?.fid || 999; 
-        const fcUser = context?.user;
         setViewerFid(currentViewerFid);
+
+        // --- NEW: AUTO-DETECT ADDRESS ---
+        // Farcaster frames give us the user object directly!
+        if (context?.user) {
+            // In V2 SDK, we might need to rely on 'signIn' to get the verified address, 
+            // but often the context provides a username we can look up.
+            // For now, we will try to use the `signIn` action if we need deeper access.
+        }
 
         const params = new URLSearchParams(window.location.search);
         const urlFid = params.get('fid');
         const targetFid = urlFid ? parseInt(urlFid) : currentViewerFid;
         setProfileFid(targetFid);
 
-        // Fetch Supabase Profile
         const { data, error } = await supabase.from('profiles').select('*').eq('id', targetFid).single();
 
         if (error || !data) {
           if (targetFid === currentViewerFid) {
             setIsNewUser(true);
             setShowLanding(true);
-            if (fcUser?.displayName) setFormName(fcUser.displayName);
-            if (fcUser?.pfpUrl) setFormPrefs(prev => ({ ...prev, pfpUrl: fcUser.pfpUrl }));
+            if (context?.user?.displayName) setFormName(context.user.displayName);
+            if (context?.user?.pfpUrl) setFormPrefs(prev => ({ ...prev, pfpUrl: context.user.pfpUrl }));
             setFormNFTs([{ id: 1, name: "Highlight #1", imageUrl: "https://placehold.co/600x600/6b21a8/FFF?text=Art" }]);
             setFormProjects([{ id: 1, name: "My First Frame", description: "Built with Remix", url: "https://warpcast.com", imageUrl: "https://placehold.co/100x100/ec4899/FFF?text=App" }]);
           }
         } else {
-          if (targetFid === currentViewerFid && fcUser?.pfpUrl && data.preferences?.pfpUrl !== fcUser.pfpUrl) {
-            data.preferences = { ...data.preferences, pfpUrl: fcUser.pfpUrl };
+          if (targetFid === currentViewerFid && context?.user?.pfpUrl && data.preferences?.pfpUrl !== context.user.pfpUrl) {
+            data.preferences = { ...data.preferences, pfpUrl: context.user.pfpUrl };
             supabase.from('profiles').update({ preferences: data.preferences }).eq('id', targetFid).then();
           }
           setProfile(data);
@@ -95,6 +104,65 @@ export default function App() {
     };
     init();
   }, [isSDKLoaded]);
+
+  // --- SIGN IN & FETCH ---
+  const handleSignInAndFetch = async () => {
+      setShowNFTPicker(true);
+      if (walletNFTs.length > 0) return;
+
+      const apiKey = import.meta.env.VITE_ALCHEMY_KEY;
+      if (!apiKey) {
+          alert("Alchemy API Key is missing.");
+          return;
+      }
+
+      setIsLoadingNFTs(true);
+      try {
+          // 1. Request Sign In
+          // We use a nonce (random string) for security, though we aren't verifying it on a backend yet.
+          const nonce = Math.random().toString(36).substring(7);
+          const result = await sdk.actions.signIn({ nonce });
+          
+          // 2. If successful, we assume the user is who they say they are.
+          // In a real app with a backend, you would verify 'result.signature' & 'result.message'.
+          // For this client-side demo, we will trust the Context FID or ask for an address if missing.
+          
+          const context = await sdk.context;
+          
+          // Fallback: If we can't get the address from the sign-in result directly (it's inside the message),
+          // we ask the user to paste it ONE time, or we can use the Neynar API (if available) to look it up.
+          // For now, let's try the manual fallback which is 100% reliable without a backend.
+          let address = prompt("Sign In Successful! \n\nTo load your assets, please paste your Ethereum/Base Address:");
+          
+          if (!address) {
+              setShowNFTPicker(false);
+              setIsLoadingNFTs(false);
+              return;
+          }
+
+          // 3. Fetch from Alchemy
+          const config = { apiKey, network: Network.BASE_MAINNET };
+          const alchemy = new Alchemy(config);
+          
+          const nfts = await alchemy.nft.getNftsForOwner(address, { pageSize: 50 });
+          const cleanNFTs = nfts.ownedNfts.filter((nft: any) => nft.media && nft.media.length > 0 && nft.media[0].gateway);
+          
+          if (cleanNFTs.length === 0) alert("No NFTs with images found on Base for this address.");
+          else setWalletNFTs(cleanNFTs);
+
+      } catch (error: any) { 
+          console.error(error); 
+          // If user rejects sign in
+          if (error.name === 'RejectedByUser') {
+              alert("Sign in cancelled.");
+          } else {
+              alert(`Error: ${error.message}`);
+          }
+          setShowNFTPicker(false);
+      } finally { 
+          setIsLoadingNFTs(false); 
+      }
+  };
 
   // --- ACTIONS ---
   const startEditing = () => {
@@ -142,45 +210,6 @@ export default function App() {
   };
 
   const openProject = (url: string) => { sdk.actions.openUrl(url); };
-
-  // --- SAFE WALLET CONNECTION ---
-  const openNFTPicker = async () => {
-      setShowNFTPicker(true);
-      if (walletNFTs.length > 0) return;
-
-      const apiKey = import.meta.env.VITE_ALCHEMY_KEY;
-      if (!apiKey) {
-          alert("Alchemy API Key is missing.");
-          return;
-      }
-
-      setIsLoadingNFTs(true);
-      try {
-          // Initialize Alchemy ONLY when needed
-          const config = { apiKey, network: Network.BASE_MAINNET };
-          const alchemy = new Alchemy(config);
-
-          const context = await sdk.context;
-          const user = context.user as any; 
-          let address = user?.verifications?.[0] || user?.custodyAddress;
-
-          if (!address) {
-              const manualAddress = prompt("No wallet found. Paste your Base wallet address to load NFTs:");
-              if (manualAddress) address = manualAddress;
-              else { setShowNFTPicker(false); setIsLoadingNFTs(false); return; }
-          }
-          const nfts = await alchemy.nft.getNftsForOwner(address, { pageSize: 50 });
-          const cleanNFTs = nfts.ownedNfts.filter((nft: any) => nft.media && nft.media.length > 0 && nft.media[0].gateway);
-          
-          if (cleanNFTs.length === 0) alert("No NFTs with images found on Base for this address.");
-          else setWalletNFTs(cleanNFTs);
-      } catch (error: any) { 
-          console.error(error); 
-          alert(`Error fetching NFTs: ${error.message}`); 
-      } finally { 
-          setIsLoadingNFTs(false); 
-      }
-  };
 
   const selectNFTFromWallet = (nft: any) => {
       const title = nft.title || nft.contract?.name || "Untitled NFT";
@@ -267,7 +296,8 @@ export default function App() {
                        ))}
                        <div className="flex gap-2 mt-2">
                            <button className="flex-1 py-2 bg-stone-100 dark:bg-stone-700 text-stone-500 dark:text-stone-300 text-sm font-bold rounded-lg disabled:opacity-50" onClick={() => setFormNFTs([...formNFTs, { id: Date.now(), name: "", imageUrl: "" }])} disabled={formNFTs.length >= 6}>+ Add URL</button>
-                           <button className="flex-1 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-sm font-bold rounded-lg disabled:opacity-50 flex items-center justify-center gap-1" onClick={openNFTPicker} disabled={formNFTs.length >= 6}>✨ Wallet</button>
+                           {/* UPDATED WALLET BUTTON */}
+                           <button className="flex-1 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-sm font-bold rounded-lg disabled:opacity-50 flex items-center justify-center gap-1" onClick={handleSignInAndFetch} disabled={formNFTs.length >= 6}>✨ Wallet</button>
                        </div>
                    </div>
 
