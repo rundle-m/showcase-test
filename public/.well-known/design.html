@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;800&display=swap');
+  
+  body {
+    background: #333;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 50px;
+    padding: 50px;
+    font-family: 'Inter', sans-serif;
+  }
+
+  /* --- 1. FEED PREVIEW IMAGE (3:2 Aspect Ratio) --- */
+  .preview-card {
+    width: 1200px;
+    height: 800px;
+    /* Farcaster Purple Gradient */
+    background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Decorative Background Circles */
+  .circle {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.1);
+  }
+  .c1 { width: 600px; height: 600px; top: -100px; right: -100px; }
+  .c2 { width: 400px; height: 400px; bottom: -50px; left: -50px; }
+
+  .content { z-index: 10; text-align: center; }
+  
+  h1 {
+    font-size: 100px;
+    margin: 0;
+    font-weight: 800;
+    letter-spacing: -2px;
+    text-shadow: 0 4px 10px rgba(0,0,0,0.2);
+  }
+  
+  p {
+    font-size: 40px;
+    margin-top: 20px;
+    opacity: 0.9;
+    font-weight: 400;
+  }
+
+  .badge {
+    background: rgba(255,255,255,0.2);
+    padding: 10px 30px;
+    border-radius: 50px;
+    font-size: 24px;
+    margin-bottom: 30px;
+    display: inline-block;
+    border: 1px solid rgba(255,255,255,0.3);
+  }
+
+  /* --- 2. SPLASH ICON (Square) --- */
+  .splash-icon {
+    width: 400px;
+    height: 400px;
+    background: #6b21a8; /* Dark Purple */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 200px;
+    border-radius: 60px; /* Rounded corners like an app icon */
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  }
+
+  .label { color: #fff; margin-bottom: 10px; font-size: 16px; opacity: 0.5; }
+</style>
+</head>
+<body>
+
+  <div>
+    <div class="label">Save as preview.png</div>
+    <div class="preview-card">
+      <div class="circle c1"></div>
+      <div class="circle c2"></div>
+      <div class="content">
+        <div class="badge">Farcaster Mini App</div>
+        <h1>My Showcase</h1>
+        <p>Your Onchain Home</p>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="label">Save as icon.png</div>
+    <div class="splash-icon">
+    
+    </div>
+  </div>
+
+</body>
+</html>
