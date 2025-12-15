@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { sdk } from '@farcaster/frame-sdk';
 import { supabase } from './supabaseClient';
-import { Alchemy, Network } from 'alchemy-sdk';
 
 // --- TYPES ---
 interface NFT { id: number; name: string; imageUrl: string; }
@@ -27,7 +26,6 @@ const FONTS = {
 
 export default function App() {
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [viewerFid, setViewerFid] = useState<number>(0);
   const [profileFid, setProfileFid] = useState<number>(0);
@@ -44,55 +42,48 @@ export default function App() {
   
   const [isSaving, setIsSaving] = useState(false);
   const [loadingImageFor, setLoadingImageFor] = useState<number | null>(null);
-  const [showNFTPicker, setShowNFTPicker] = useState(false);
-  const [walletNFTs, setWalletNFTs] = useState<any[]>([]); 
-  const [isLoadingNFTs, setIsLoadingNFTs] = useState(false);
 
   useEffect(() => {
     const init = async () => {
+      // 1. INSTANT READY: Tell Farcaster to hide splash screen immediately
       try {
-        // 1. TELL FARCASTER WE ARE READY INSTANTLY ⚡️
-        // This is critical. We call this before anything else.
-        sdk.actions.ready(); 
-
-        const context = await sdk.context;
-        const currentViewerFid = context?.user?.fid || 999; 
-        const fcUser = context?.user;
-        setViewerFid(currentViewerFid);
-
-        const params = new URLSearchParams(window.location.search);
-        const urlFid = params.get('fid');
-        const targetFid = urlFid ? parseInt(urlFid) : currentViewerFid;
-        setProfileFid(targetFid);
-
-        const { data, error } = await supabase.from('profiles').select('*').eq('id', targetFid).single();
-
-        if (error || !data) {
-          if (targetFid === currentViewerFid) {
-            setIsNewUser(true);
-            setShowLanding(true);
-            if (fcUser?.displayName) setFormName(fcUser.displayName);
-            if (fcUser?.pfpUrl) setFormPrefs(prev => ({ ...prev, pfpUrl: fcUser.pfpUrl }));
-            setFormNFTs([{ id: 1, name: "Highlight #1", imageUrl: "https://placehold.co/600x600/6b21a8/FFF?text=Art" }]);
-            setFormProjects([{ id: 1, name: "My First Frame", description: "Built with Remix", url: "https://warpcast.com", imageUrl: "https://placehold.co/100x100/ec4899/FFF?text=App" }]);
-          }
-        } else {
-          if (targetFid === currentViewerFid && fcUser?.pfpUrl && data.preferences?.pfpUrl !== fcUser.pfpUrl) {
-            data.preferences = { ...data.preferences, pfpUrl: fcUser.pfpUrl };
-            supabase.from('profiles').update({ preferences: data.preferences }).eq('id', targetFid).then();
-          }
-          setProfile(data);
-        }
-        setIsSDKLoaded(true);
-      } catch (err: any) {
-        console.error("Crash:", err);
-        setErrorMsg(err.message || "Unknown error occurred loading the app.");
-        // Even if we crash, tell Farcaster we are ready so the splash screen goes away and shows the error
-        sdk.actions.ready(); 
+        sdk.actions.ready();
+      } catch (e) {
+        console.error("SDK Ready failed", e);
       }
+
+      const context = await sdk.context;
+      const currentViewerFid = context?.user?.fid || 999; 
+      const fcUser = context?.user;
+      setViewerFid(currentViewerFid);
+
+      const params = new URLSearchParams(window.location.search);
+      const urlFid = params.get('fid');
+      const targetFid = urlFid ? parseInt(urlFid) : currentViewerFid;
+      setProfileFid(targetFid);
+
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', targetFid).single();
+
+      if (error || !data) {
+        if (targetFid === currentViewerFid) {
+          setIsNewUser(true);
+          setShowLanding(true);
+          if (fcUser?.displayName) setFormName(fcUser.displayName);
+          if (fcUser?.pfpUrl) setFormPrefs(prev => ({ ...prev, pfpUrl: fcUser.pfpUrl }));
+          setFormNFTs([{ id: 1, name: "Highlight #1", imageUrl: "https://placehold.co/600x600/6b21a8/FFF?text=Art" }]);
+          setFormProjects([{ id: 1, name: "My First Frame", description: "Built with Remix", url: "https://warpcast.com", imageUrl: "https://placehold.co/100x100/ec4899/FFF?text=App" }]);
+        }
+      } else {
+        if (targetFid === currentViewerFid && fcUser?.pfpUrl && data.preferences?.pfpUrl !== fcUser.pfpUrl) {
+          data.preferences = { ...data.preferences, pfpUrl: fcUser.pfpUrl };
+          supabase.from('profiles').update({ preferences: data.preferences }).eq('id', targetFid).then();
+        }
+        setProfile(data);
+      }
+      setIsSDKLoaded(true);
     };
-    init();
-  }, []);
+    if (sdk && !isSDKLoaded) init();
+  }, [isSDKLoaded]);
 
   // --- ACTIONS ---
   const startEditing = () => {
@@ -141,50 +132,6 @@ export default function App() {
 
   const openProject = (url: string) => { sdk.actions.openUrl(url); };
 
-  // --- ALCHEMY FETCH LOGIC (INITIALIZED ON DEMAND) 🔮 ---
-  const openNFTPicker = async () => {
-      setShowNFTPicker(true);
-      if (walletNFTs.length > 0) return;
-
-      const apiKey = import.meta.env.VITE_ALCHEMY_KEY;
-      if (!apiKey) {
-          alert("Alchemy API Key is missing. Check your .env file or Vercel settings.");
-          return;
-      }
-
-      setIsLoadingNFTs(true);
-      try {
-          // Initialize Alchemy HERE, not at the top level
-          const config = { apiKey, network: Network.BASE_MAINNET };
-          const alchemy = new Alchemy(config);
-
-          const context = await sdk.context;
-          const user = context.user as any; 
-          let address = user?.verifications?.[0] || user?.custodyAddress;
-
-          if (!address) {
-              const manualAddress = prompt("We couldn't detect a connected wallet (are you in test mode?). Paste your Base wallet address to load NFTs:");
-              if (manualAddress) address = manualAddress;
-              else { setShowNFTPicker(false); setIsLoadingNFTs(false); return; }
-          }
-          const nfts = await alchemy.nft.getNftsForOwner(address, { pageSize: 50 });
-          const cleanNFTs = nfts.ownedNfts.filter((nft: any) => nft.media && nft.media.length > 0 && nft.media[0].gateway);
-          
-          if (cleanNFTs.length === 0) alert("No NFTs with images found on Base for this address.");
-          else setWalletNFTs(cleanNFTs);
-      } catch (error) { console.error(error); alert("Error fetching NFTs. Check your Alchemy API key."); } 
-      finally { setIsLoadingNFTs(false); }
-  };
-
-  const selectNFTFromWallet = (nft: any) => {
-      const title = nft.title || nft.contract?.name || "Untitled NFT";
-      const image = nft.media[0].gateway;
-      setFormNFTs([...formNFTs, { id: Date.now(), name: title, imageUrl: image }]);
-      setShowNFTPicker(false);
-  };
-
-  // --- LOADING / ERROR STATES ---
-  if (errorMsg) return <div className="min-h-screen flex flex-col items-center justify-center p-8 text-center text-red-500 font-bold bg-white dark:bg-stone-900">⚠️ Error: {errorMsg}</div>;
   if (!isSDKLoaded || (!profile && !isNewUser)) return <div className="min-h-screen flex items-center justify-center p-10 animate-pulse text-stone-400">Loading Homepage...</div>;
 
   const currentThemeKey = (profile?.preferences?.theme || 'farcaster') as keyof typeof THEMES;
@@ -210,7 +157,6 @@ export default function App() {
       );
   }
 
-  // --- MAIN APP RENDER ---
   return (
     <div className={`${isDarkMode ? 'dark' : ''} ${currentFontClass}`}>
       <div className="min-h-screen bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 pb-24 transition-colors duration-500 bg-cover bg-fixed bg-center" style={{ backgroundImage: backgroundImage ? `url(${backgroundImage})` : undefined }}>
@@ -220,22 +166,6 @@ export default function App() {
               <div className="fixed inset-0 z-50 bg-stone-100 dark:bg-stone-900 overflow-y-auto p-4 pb-20 font-sans">
                 <div className="max-w-md mx-auto space-y-6">
                    <h1 className="text-2xl font-bold mb-6 text-center dark:text-white">{isEditing ? "Edit Homepage" : "Create Homepage"}</h1>
-                   {/* NFT PICKER */}
-                   {showNFTPicker && (
-                       <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4">
-                           <div className="bg-white dark:bg-stone-800 w-full max-w-md h-[80vh] rounded-2xl flex flex-col overflow-hidden relative">
-                               <div className="p-4 border-b dark:border-stone-700 flex justify-between items-center"><h3 className="font-bold dark:text-white">Select from Wallet (Base)</h3><button onClick={() => setShowNFTPicker(false)} className="text-2xl dark:text-white">×</button></div>
-                               <div className="flex-1 overflow-y-auto p-4 grid grid-cols-2 gap-4">
-                                   {isLoadingNFTs ? <div className="col-span-2 text-center py-10 text-stone-400">Loading Base NFTs... 🔮</div> : walletNFTs.length === 0 ? <div className="col-span-2 text-center py-10 text-stone-400">No images found on Base.</div> : walletNFTs.map((nft, i) => (
-                                           <div key={i} onClick={() => selectNFTFromWallet(nft)} className="aspect-square bg-stone-100 rounded-xl overflow-hidden cursor-pointer hover:ring-2 ring-purple-500 relative">
-                                               {nft.media?.[0]?.gateway && <img src={nft.media[0].gateway} className="w-full h-full object-cover" />}
-                                               <p className="absolute bottom-0 w-full text-[10px] p-1 truncate bg-white/90 text-black">{nft.title || "NFT"}</p>
-                                           </div>
-                                   ))}
-                               </div>
-                           </div>
-                       </div>
-                   )}
                    
                    <div className="bg-white dark:bg-stone-800 p-4 rounded-xl shadow-sm space-y-4">
                       {/* PREFERENCES */}
@@ -263,7 +193,7 @@ export default function App() {
                        ))}
                        <div className="flex gap-2 mt-2">
                            <button className="flex-1 py-2 bg-stone-100 dark:bg-stone-700 text-stone-500 dark:text-stone-300 text-sm font-bold rounded-lg disabled:opacity-50" onClick={() => setFormNFTs([...formNFTs, { id: Date.now(), name: "", imageUrl: "" }])} disabled={formNFTs.length >= 6}>+ Add URL</button>
-                           <button className="flex-1 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-sm font-bold rounded-lg disabled:opacity-50 flex items-center justify-center gap-1" onClick={openNFTPicker} disabled={formNFTs.length >= 6}>✨ Wallet</button>
+                           {/* NO WALLET BUTTON HERE IN STABLE V4 */}
                        </div>
                    </div>
 
