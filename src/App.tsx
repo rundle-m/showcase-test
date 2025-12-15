@@ -43,23 +43,20 @@ export default function App() {
   
   const [isSaving, setIsSaving] = useState(false);
   const [loadingImageFor, setLoadingImageFor] = useState<number | null>(null);
-  const [showNFTPicker, setShowNFTPicker] = useState(false);
-  const [walletNFTs, setWalletNFTs] = useState<any[]>([]); 
-  const [isLoadingNFTs, setIsLoadingNFTs] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false); // Loading state for login
 
   useEffect(() => {
     const init = async () => {
-      // 1. INSTANT READY
       try {
         await sdk.actions.ready(); 
       } catch (e) {
         console.error("SDK Ready failed", e);
       }
 
-      // 2. Load Data & User Context
       try {
         const context = await sdk.context;
         const currentViewerFid = context?.user?.fid || 999; 
+        const fcUser = context?.user;
         setViewerFid(currentViewerFid);
 
         const params = new URLSearchParams(window.location.search);
@@ -71,16 +68,17 @@ export default function App() {
 
         if (error || !data) {
           if (targetFid === currentViewerFid) {
+            // NEW USER: Show Landing
             setIsNewUser(true);
             setShowLanding(true);
-            if (context?.user?.displayName) setFormName(context.user.displayName);
-            if (context?.user?.pfpUrl) setFormPrefs(prev => ({ ...prev, pfpUrl: context.user.pfpUrl }));
-            setFormNFTs([{ id: 1, name: "Highlight #1", imageUrl: "https://placehold.co/600x600/6b21a8/FFF?text=Art" }]);
-            setFormProjects([{ id: 1, name: "My First Frame", description: "Built with Remix", url: "https://warpcast.com", imageUrl: "https://placehold.co/100x100/ec4899/FFF?text=App" }]);
+            // Default Fallbacks
+            if (fcUser?.displayName) setFormName(fcUser.displayName);
+            if (fcUser?.pfpUrl) setFormPrefs(prev => ({ ...prev, pfpUrl: fcUser.pfpUrl }));
           }
         } else {
-          if (targetFid === currentViewerFid && context?.user?.pfpUrl && data.preferences?.pfpUrl !== context.user.pfpUrl) {
-            data.preferences = { ...data.preferences, pfpUrl: context.user.pfpUrl };
+          // EXISTING USER: Load Data
+          if (targetFid === currentViewerFid && fcUser?.pfpUrl && data.preferences?.pfpUrl !== fcUser.pfpUrl) {
+            data.preferences = { ...data.preferences, pfpUrl: fcUser.pfpUrl };
             supabase.from('profiles').update({ preferences: data.preferences }).eq('id', targetFid).then();
           }
           setProfile(data);
@@ -88,60 +86,76 @@ export default function App() {
       } catch (err) {
         console.error("Initialization error:", err);
       }
-      
       setIsSDKLoaded(true);
     };
     init();
   }, [isSDKLoaded]);
 
-  // --- SIGN IN & FETCH ---
-  const handleSignInAndFetch = async () => {
-      setShowNFTPicker(true);
-      if (walletNFTs.length > 0) return;
-
+  // --- 1. THE "CONNECT IDENTITY" FUNCTION ---
+  // This runs when a NEW user clicks the button on the landing page
+  const handleConnectAndFetch = async () => {
+      setIsLoggingIn(true);
       const apiKey = import.meta.env.VITE_ALCHEMY_KEY;
-      if (!apiKey) {
-          alert("Alchemy API Key is missing.");
-          return;
-      }
-
-      setIsLoadingNFTs(true);
+      
       try {
-          // 1. Request Sign In (We ignore the result for now since we don't have a backend to verify it)
-          const nonce = Math.random().toString(36).substring(7);
-          await sdk.actions.signIn({ nonce }); //
+          // A. Sign In (Nonce fixed to be > 8 chars)
+          const nonce = Math.random().toString(36).substring(2, 15);
+          await sdk.actions.signIn({ nonce }); 
           
-          // 2. Ask user for address (Fallback since we can't decode the signature client-side)
-          let address = prompt("Sign In Successful! \n\nTo load your assets, please paste your Ethereum/Base Address:");
-          
-          if (!address) {
-              setShowNFTPicker(false);
-              setIsLoadingNFTs(false);
-              return;
+          // B. Get Context again to be sure
+          const context = await sdk.context;
+          if (context?.user?.displayName) setFormName(context.user.displayName);
+          if (context?.user?.pfpUrl) setFormPrefs(prev => ({ ...prev, pfpUrl: context.user.pfpUrl }));
+
+          // C. Fetch NFTs
+          if (apiKey) {
+              let address = prompt("Login Successful! 🚀\n\nPaste your Wallet Address to auto-load your NFTs:");
+              if (address) await fetchNFTs(address, apiKey);
           }
 
-          // 3. Fetch from Alchemy
-          const config = { apiKey, network: Network.BASE_MAINNET };
-          const alchemy = new Alchemy(config);
-          
-          const nfts = await alchemy.nft.getNftsForOwner(address, { pageSize: 50 });
-          // Use 'as any' here to handle Alchemy's complex type definition if needed, though usually standard filtering works
-          const cleanNFTs = nfts.ownedNfts.filter((nft: any) => nft.media && nft.media.length > 0 && nft.media[0].gateway);
-          
-          if (cleanNFTs.length === 0) alert("No NFTs with images found on Base for this address.");
-          else setWalletNFTs(cleanNFTs);
+          // D. Start Editing
+          setShowLanding(false);
+          setIsEditing(true);
 
       } catch (error: any) { 
           console.error(error); 
-          // If user rejects sign in
-          if (error.name === 'RejectedByUser') {
-              alert("Sign in cancelled.");
-          } else {
-              alert(`Error: ${error.message}`);
-          }
-          setShowNFTPicker(false);
+          if (error.name !== 'RejectedByUser') alert(`Error: ${error.message}`);
       } finally { 
-          setIsLoadingNFTs(false); 
+          setIsLoggingIn(false); 
+      }
+  };
+
+  // --- 2. REUSABLE NFT FETCH LOGIC ---
+  const fetchNFTs = async (address: string, apiKey: string) => {
+      const config = { apiKey, network: Network.BASE_MAINNET };
+      const alchemy = new Alchemy(config);
+      const nfts = await alchemy.nft.getNftsForOwner(address, { pageSize: 50 });
+      const cleanNFTs = nfts.ownedNfts
+          .filter((nft: any) => nft.media && nft.media.length > 0 && nft.media[0].gateway)
+          .map((nft: any) => ({
+              id: Date.now() + Math.random(),
+              name: nft.title || "NFT",
+              imageUrl: nft.media[0].gateway
+          }))
+          .slice(0, 6); // Limit to 6
+      
+      if (cleanNFTs.length > 0) setFormNFTs(cleanNFTs);
+      else alert("No NFTs with images found on Base.");
+  };
+
+  // --- 3. EXISTING USER SYNC ---
+  // For users who already have a profile but want to refresh/connect wallet
+  const handleSyncWallet = async () => {
+      const apiKey = import.meta.env.VITE_ALCHEMY_KEY;
+      if (!apiKey) return alert("API Key missing");
+      
+      const address = prompt("Paste your Wallet Address to sync NFTs:");
+      if (address) {
+          setIsLoggingIn(true); // Reuse loading state
+          try {
+              await fetchNFTs(address, apiKey);
+          } catch(e) { alert("Error fetching"); }
+          setIsLoggingIn(false);
       }
   };
 
@@ -155,8 +169,6 @@ export default function App() {
       setIsEditing(true);
     }
   };
-
-  const handleStartCreate = () => { setShowLanding(false); setIsEditing(true); };
 
   const shareProfile = useCallback(() => {
     const appUrl = `https://showcase-test2-ten.vercel.app/?fid=${viewerFid}`; 
@@ -192,13 +204,6 @@ export default function App() {
 
   const openProject = (url: string) => { sdk.actions.openUrl(url); };
 
-  const selectNFTFromWallet = (nft: any) => {
-      const title = nft.title || nft.contract?.name || "Untitled NFT";
-      const image = nft.media[0].gateway;
-      setFormNFTs([...formNFTs, { id: Date.now(), name: title, imageUrl: image }]);
-      setShowNFTPicker(false);
-  };
-
   if (!isSDKLoaded || (!profile && !isNewUser)) return <div className="min-h-screen flex items-center justify-center p-10 animate-pulse text-stone-400">Loading Homepage...</div>;
 
   const currentThemeKey = (profile?.preferences?.theme || 'farcaster') as keyof typeof THEMES;
@@ -217,8 +222,12 @@ export default function App() {
             <div className="w-full max-w-md mx-auto">
                 <div className="w-24 h-24 bg-gradient-to-br from-violet-600 to-indigo-600 rounded-3xl shadow-xl flex items-center justify-center mb-8 rotate-3 mx-auto"><span className="text-5xl">🏠</span></div>
                 <h1 className="text-3xl font-black text-stone-900 dark:text-white mb-4 tracking-tight">Your Onchain Home</h1>
-                <p className="text-stone-500 dark:text-stone-400 text-lg mb-10 max-w-xs mx-auto leading-relaxed">Showcase your NFTs, favorite frames, and projects in one beautiful place.</p>
-                <button onClick={handleStartCreate} className="w-full max-w-xs bg-stone-900 dark:bg-white text-white dark:text-stone-900 py-4 rounded-2xl font-bold shadow-lg text-lg hover:scale-105 transition-transform">Create Homepage</button>
+                <p className="text-stone-500 dark:text-stone-400 text-lg mb-10 max-w-xs mx-auto leading-relaxed">Connect your Farcaster account to instantly build your showcase.</p>
+                
+                {/* CONNECT IDENTITY BUTTON */}
+                <button onClick={handleConnectAndFetch} disabled={isLoggingIn} className="w-full max-w-xs bg-stone-900 dark:bg-white text-white dark:text-stone-900 py-4 rounded-2xl font-bold shadow-lg text-lg hover:scale-105 transition-transform flex items-center justify-center gap-2">
+                    {isLoggingIn ? "Connecting..." : "✨ Connect Identity"}
+                </button>
             </div>
         </div>
       );
@@ -234,25 +243,8 @@ export default function App() {
               <div className="fixed inset-0 z-50 bg-stone-100 dark:bg-stone-900 overflow-y-auto p-4 pb-20 font-sans">
                 <div className="max-w-md mx-auto space-y-6">
                    <h1 className="text-2xl font-bold mb-6 text-center dark:text-white">{isEditing ? "Edit Homepage" : "Create Homepage"}</h1>
-                   {/* NFT PICKER */}
-                   {showNFTPicker && (
-                       <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4">
-                           <div className="bg-white dark:bg-stone-800 w-full max-w-md h-[80vh] rounded-2xl flex flex-col overflow-hidden relative">
-                               <div className="p-4 border-b dark:border-stone-700 flex justify-between items-center"><h3 className="font-bold dark:text-white">Select from Wallet (Base)</h3><button onClick={() => setShowNFTPicker(false)} className="text-2xl dark:text-white">×</button></div>
-                               <div className="flex-1 overflow-y-auto p-4 grid grid-cols-2 gap-4">
-                                   {isLoadingNFTs ? <div className="col-span-2 text-center py-10 text-stone-400">Loading Base NFTs... 🔮</div> : walletNFTs.length === 0 ? <div className="col-span-2 text-center py-10 text-stone-400">No images found on Base.</div> : walletNFTs.map((nft, i) => (
-                                           <div key={i} onClick={() => selectNFTFromWallet(nft)} className="aspect-square bg-stone-100 rounded-xl overflow-hidden cursor-pointer hover:ring-2 ring-purple-500 relative">
-                                               {nft.media?.[0]?.gateway && <img src={nft.media[0].gateway} className="w-full h-full object-cover" />}
-                                               <p className="absolute bottom-0 w-full text-[10px] p-1 truncate bg-white/90 text-black">{nft.title || "NFT"}</p>
-                                           </div>
-                                   ))}
-                               </div>
-                           </div>
-                       </div>
-                   )}
                    
                    <div className="bg-white dark:bg-stone-800 p-4 rounded-xl shadow-sm space-y-4">
-                      {/* PREFERENCES */}
                       <div className="flex justify-between items-center"><h3 className="font-bold text-stone-800 dark:text-stone-200">Dark Mode</h3><button onClick={() => setFormPrefs({...formPrefs, darkMode: !formPrefs.darkMode})} className={`w-14 h-8 rounded-full p-1 transition-colors ${formPrefs.darkMode ? 'bg-purple-600' : 'bg-stone-300'}`}><div className={`w-6 h-6 bg-white rounded-full shadow-md transform transition-transform ${formPrefs.darkMode ? 'translate-x-6' : 'translate-x-0'}`} /></button></div>
                       <div className="border-t border-stone-100 dark:border-stone-700 pt-4"><h3 className="font-bold text-stone-800 dark:text-stone-200 mb-2">Banner Image</h3><div className="flex gap-2"><input type="text" placeholder="Paste image URL..." className="flex-1 p-2 bg-stone-50 dark:bg-stone-700 dark:text-white rounded outline-none text-xs border border-transparent focus:border-purple-500" value={formPrefs.bannerUrl || ''} onChange={(e) => setFormPrefs({...formPrefs, bannerUrl: e.target.value})} />{formPrefs.bannerUrl && (<button onClick={() => setFormPrefs({...formPrefs, bannerUrl: undefined})} className="px-3 bg-red-100 text-red-600 rounded text-xs font-bold">Clear</button>)}</div></div>
                       <div className="border-t border-stone-100 dark:border-stone-700 pt-4"><h3 className="font-bold text-stone-800 dark:text-stone-200 mb-2">Background Wallpaper</h3><div className="flex gap-2"><input type="text" placeholder="Paste image URL..." className="flex-1 p-2 bg-stone-50 dark:bg-stone-700 dark:text-white rounded outline-none text-xs border border-transparent focus:border-purple-500" value={formPrefs.backgroundUrl || ''} onChange={(e) => setFormPrefs({...formPrefs, backgroundUrl: e.target.value})} />{formPrefs.backgroundUrl && (<button onClick={() => setFormPrefs({...formPrefs, backgroundUrl: undefined})} className="px-3 bg-red-100 text-red-600 rounded text-xs font-bold">Clear</button>)}</div></div>
@@ -277,7 +269,8 @@ export default function App() {
                        ))}
                        <div className="flex gap-2 mt-2">
                            <button className="flex-1 py-2 bg-stone-100 dark:bg-stone-700 text-stone-500 dark:text-stone-300 text-sm font-bold rounded-lg disabled:opacity-50" onClick={() => setFormNFTs([...formNFTs, { id: Date.now(), name: "", imageUrl: "" }])} disabled={formNFTs.length >= 6}>+ Add URL</button>
-                           <button className="flex-1 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-sm font-bold rounded-lg disabled:opacity-50 flex items-center justify-center gap-1" onClick={handleSignInAndFetch} disabled={formNFTs.length >= 6}>✨ Wallet</button>
+                           {/* SYNC WALLET BUTTON (MOVED HERE) */}
+                           <button className="flex-1 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-sm font-bold rounded-lg disabled:opacity-50 flex items-center justify-center gap-1" onClick={handleSyncWallet} disabled={formNFTs.length >= 6 || isLoggingIn}>✨ Sync Wallet</button>
                        </div>
                    </div>
 

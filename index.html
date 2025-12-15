@@ -1,6 +1,23 @@
 <!doctype html>
 <html lang="en">
-<meta name="fc:miniapp" content='{
+  <head>
+    <meta charset="UTF-8" />
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <title>My Onchain Home</title>
+
+    <script>
+      window.addEventListener('error', function(e) {
+        // Only alert if it's a critical script error, not just a 404 image
+        if (e.message && e.message.toLowerCase().includes('script')) {
+           console.error('Global Crash:', e.message);
+        }
+      });
+    </script>
+
+    <meta name="fc:miniapp" content='{
       "version": "1",
       "imageUrl": "https://showcase-test2-ten.vercel.app/preview.png",
       "button": {
