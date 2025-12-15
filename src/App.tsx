@@ -83,7 +83,7 @@ export default function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [loadingImageFor, setLoadingImageFor] = useState<number | null>(null);
 
-  // Use 'any' here to stop TypeScript from complaining about complex Alchemy types
+  // Use 'any' to bypass strict TS checks for Alchemy data
   const [showNFTPicker, setShowNFTPicker] = useState(false);
   const [walletNFTs, setWalletNFTs] = useState<any[]>([]); 
   const [isLoadingNFTs, setIsLoadingNFTs] = useState(false);
@@ -125,17 +125,28 @@ export default function App() {
     if (sdk && !isSDKLoaded) init();
   }, [isSDKLoaded]);
 
+  // --- ACTIONS ---
   const startEditing = () => {
     if (profile) {
-      setFormName(profile.name); setFormBio(profile.bio); 
-      setFormNFTs(profile.nfts || []); setFormProjects(profile.projects || []); 
+      setFormName(profile.name); 
+      setFormBio(profile.bio); 
+      setFormNFTs(profile.nfts || []); 
+      setFormProjects(profile.projects || []); 
       
-      // FIXED: Defined defaults separately to avoid "specified more than once" warning
-      const currentPrefs = profile.preferences || {};
-      setFormPrefs({ 
-          showNFTs: true, showProjects: true, theme: 'farcaster', font: 'modern', darkMode: false, pfpUrl: undefined, bannerUrl: undefined, backgroundUrl: undefined,
-          ...currentPrefs 
-      });
+      // FIX: Create a clean default object first to avoid linter warnings
+      const defaults: Preferences = { 
+        showNFTs: true, 
+        showProjects: true, 
+        theme: 'farcaster', 
+        font: 'modern', 
+        darkMode: false, 
+        pfpUrl: undefined, 
+        bannerUrl: undefined, 
+        backgroundUrl: undefined
+      };
+
+      // Then merge it with the profile preferences
+      setFormPrefs({ ...defaults, ...(profile.preferences || {}) });
       
       setIsEditing(true);
     }
@@ -186,11 +197,8 @@ export default function App() {
       setIsLoadingNFTs(true);
       try {
           const context = await sdk.context;
+          const user = context.user as any; // Cast to 'any' to fix missing types
           
-          // FIXED: Use 'as any' to bypass TypeScript strictness on the User object
-          const user = context.user as any; 
-          
-          // Try to find an address
           const address = user.verifications?.[0] || user.custodyAddress;
 
           if (!address) {
@@ -199,11 +207,8 @@ export default function App() {
               return;
           }
 
-          // Fetch from Alchemy
           const nfts = await alchemy.nft.getNftsForOwner(address, { pageSize: 20 });
           
-          // Filter valid images
-          // FIXED: Type 'nft' as 'any' to avoid the "media does not exist" error
           const cleanNFTs = nfts.ownedNfts.filter((nft: any) => 
               nft.media && nft.media.length > 0 && nft.media[0].gateway
           );
