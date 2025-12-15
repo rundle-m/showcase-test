@@ -3,13 +3,6 @@ import { sdk } from '@farcaster/frame-sdk';
 import { supabase } from './supabaseClient';
 import { Alchemy, Network } from 'alchemy-sdk';
 
-// --- CONFIG ---
-const config = {
-  apiKey: import.meta.env.VITE_ALCHEMY_KEY, 
-  network: Network.BASE_MAINNET, 
-};
-const alchemy = new Alchemy(config);
-
 // --- TYPES ---
 interface NFT { id: number; name: string; imageUrl: string; }
 interface Project { id: number; name: string; description: string; url: string; imageUrl: string; }
@@ -34,7 +27,7 @@ const FONTS = {
 
 export default function App() {
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null); // NEW: Error State
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [viewerFid, setViewerFid] = useState<number>(0);
   const [profileFid, setProfileFid] = useState<number>(0);
@@ -55,14 +48,29 @@ export default function App() {
   const [walletNFTs, setWalletNFTs] = useState<any[]>([]); 
   const [isLoadingNFTs, setIsLoadingNFTs] = useState(false);
 
+  // NEW: State to hold the Alchemy instance safely
+  const [alchemyInstance, setAlchemyInstance] = useState<Alchemy | null>(null);
+
   useEffect(() => {
+    // 1. CALL READY INSTANTLY (Top Priority)
+    // We wrap this in a try-catch to ensure it runs even if SDK is weird
+    try {
+        sdk.actions.ready();
+    } catch (e) {
+        console.error("SDK Ready failed:", e);
+    }
+
     const init = async () => {
       try {
-        // 1. TELL FARCASTER WE ARE READY INSTANTLY ⚡️
-        // We do this before fetching any data so the splash screen vanishes.
-        sdk.actions.ready();
+        // 2. Initialize Alchemy safely inside the effect
+        const apiKey = import.meta.env.VITE_ALCHEMY_KEY;
+        if (apiKey) {
+            const config = { apiKey, network: Network.BASE_MAINNET };
+            setAlchemyInstance(new Alchemy(config));
+        } else {
+            console.warn("Alchemy Key missing - Wallet features will be disabled.");
+        }
 
-        // 2. Load User Context
         const context = await sdk.context;
         const currentViewerFid = context?.user?.fid || 999; 
         const fcUser = context?.user;
@@ -73,7 +81,6 @@ export default function App() {
         const targetFid = urlFid ? parseInt(urlFid) : currentViewerFid;
         setProfileFid(targetFid);
 
-        // 3. Load Supabase Data
         const { data, error } = await supabase.from('profiles').select('*').eq('id', targetFid).single();
 
         if (error || !data) {
@@ -86,7 +93,6 @@ export default function App() {
             setFormProjects([{ id: 1, name: "My First Frame", description: "Built with Remix", url: "https://warpcast.com", imageUrl: "https://placehold.co/100x100/ec4899/FFF?text=App" }]);
           }
         } else {
-          // Auto-update PFP if needed
           if (targetFid === currentViewerFid && fcUser?.pfpUrl && data.preferences?.pfpUrl !== fcUser.pfpUrl) {
             data.preferences = { ...data.preferences, pfpUrl: fcUser.pfpUrl };
             supabase.from('profiles').update({ preferences: data.preferences }).eq('id', targetFid).then();
@@ -95,14 +101,12 @@ export default function App() {
         }
         setIsSDKLoaded(true);
       } catch (err: any) {
-        // Catch crash errors and show them on screen
         console.error("Crash:", err);
         setErrorMsg(err.message || "Unknown error occurred loading the app.");
-        sdk.actions.ready(); // Ensure we unblock the screen even if we crash
       }
     };
     init();
-  }, []); // Run once on mount
+  }, []);
 
   // --- ACTIONS ---
   const startEditing = () => {
@@ -154,6 +158,13 @@ export default function App() {
   const openNFTPicker = async () => {
       setShowNFTPicker(true);
       if (walletNFTs.length > 0) return;
+      
+      // Safety check: Is Alchemy loaded?
+      if (!alchemyInstance) {
+          alert("Wallet connection is not available (Missing API Key).");
+          return;
+      }
+
       setIsLoadingNFTs(true);
       try {
           const context = await sdk.context;
@@ -165,7 +176,7 @@ export default function App() {
               if (manualAddress) address = manualAddress;
               else { setShowNFTPicker(false); setIsLoadingNFTs(false); return; }
           }
-          const nfts = await alchemy.nft.getNftsForOwner(address, { pageSize: 50 });
+          const nfts = await alchemyInstance.nft.getNftsForOwner(address, { pageSize: 50 });
           const cleanNFTs = nfts.ownedNfts.filter((nft: any) => nft.media && nft.media.length > 0 && nft.media[0].gateway);
           
           if (cleanNFTs.length === 0) alert("No NFTs with images found on Base for this address.");
@@ -208,7 +219,7 @@ export default function App() {
       );
   }
 
-  // --- MAIN APP RENDER (Truncated for brevity, Logic unchanged) ---
+  // --- MAIN APP RENDER ---
   return (
     <div className={`${isDarkMode ? 'dark' : ''} ${currentFontClass}`}>
       <div className="min-h-screen bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 pb-24 transition-colors duration-500 bg-cover bg-fixed bg-center" style={{ backgroundImage: backgroundImage ? `url(${backgroundImage})` : undefined }}>
@@ -245,7 +256,7 @@ export default function App() {
                    </div>
 
                    <div className="bg-white dark:bg-stone-800 p-4 rounded-xl shadow-sm space-y-3">
-                       <div className="flex justify-between font-bold dark:text-stone-200"><h3>Identity</h3></div>
+                       <div className="flex justify-between items-center font-bold dark:text-stone-200"><h3>Identity</h3></div>
                        <input type="text" placeholder="Name" className="w-full border-b dark:border-stone-700 p-2 bg-transparent dark:text-white outline-none" value={formName} onChange={(e)=>setFormName(e.target.value)} />
                        <textarea placeholder="Bio" className="w-full border-b dark:border-stone-700 p-2 bg-transparent dark:text-white outline-none" value={formBio} onChange={(e)=>setFormBio(e.target.value)} />
                    </div>
