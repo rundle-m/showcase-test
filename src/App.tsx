@@ -6,7 +6,6 @@ import { Alchemy, Network } from 'alchemy-sdk';
 // --- CONFIG ---
 const config = {
   apiKey: import.meta.env.VITE_ALCHEMY_KEY, 
-  // FIXED: Switched to BASE_MAINNET to match your Alchemy setup 🔵
   network: Network.BASE_MAINNET, 
 };
 const alchemy = new Alchemy(config);
@@ -90,6 +89,9 @@ export default function App() {
 
   useEffect(() => {
     const init = async () => {
+      // FIX: Call ready() IMMEDIATELY to dismiss the splash screen 🚀
+      sdk.actions.ready();
+
       const context = await sdk.context;
       const currentViewerFid = context?.user?.fid || 999; 
       const fcUser = context?.user;
@@ -119,7 +121,7 @@ export default function App() {
         }
         setProfile(data);
       }
-      sdk.actions.ready();
+      
       setIsSDKLoaded(true);
     };
     if (sdk && !isSDKLoaded) init();
@@ -175,7 +177,6 @@ export default function App() {
 
   const openProject = (url: string) => { sdk.actions.openUrl(url); };
 
-  // --- ALCHEMY FETCH LOGIC (UPDATED) 🔮 ---
   const openNFTPicker = async () => {
       setShowNFTPicker(true);
       if (walletNFTs.length > 0) return;
@@ -187,7 +188,6 @@ export default function App() {
           
           let address = user?.verifications?.[0] || user?.custodyAddress;
 
-          // NEW: If address is missing, ask the user for it! (Fallback for testing)
           if (!address) {
               const manualAddress = prompt("We couldn't detect a connected wallet (are you in test mode?). Paste your Base wallet address to load NFTs:");
               if (manualAddress) {
@@ -199,9 +199,7 @@ export default function App() {
               }
           }
 
-          // Fetch from Alchemy (Now on BASE)
           const nfts = await alchemy.nft.getNftsForOwner(address, { pageSize: 50 });
-          
           const cleanNFTs = nfts.ownedNfts.filter((nft: any) => 
               nft.media && nft.media.length > 0 && nft.media[0].gateway
           );
@@ -239,7 +237,6 @@ export default function App() {
   const bannerImage = profile?.preferences?.bannerUrl;
   const backgroundImage = profile?.preferences?.backgroundUrl;
 
-  // --- WELCOME SCREEN ---
   if (isNewUser && showLanding) {
       return (
         <div className={`min-h-screen flex flex-col items-center justify-center p-6 text-center transition-colors font-sans bg-stone-50 dark:bg-stone-950 ${isDarkMode ? 'dark' : ''}`}>
@@ -253,7 +250,6 @@ export default function App() {
       );
   }
 
-  // --- MAIN APP ---
   return (
     <div className={`${isDarkMode ? 'dark' : ''} ${currentFontClass}`}>
       <div className="min-h-screen bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 pb-24 transition-colors duration-500 bg-cover bg-fixed bg-center" style={{ backgroundImage: backgroundImage ? `url(${backgroundImage})` : undefined }}>
@@ -265,7 +261,6 @@ export default function App() {
                 <div className="max-w-md mx-auto space-y-6">
                    <h1 className="text-2xl font-bold mb-6 text-center dark:text-white">{isEditing ? "Edit Homepage" : "Create Homepage"}</h1>
                    
-                   {/* --- NFT PICKER MODAL --- */}
                    {showNFTPicker && (
                        <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4">
                            <div className="bg-white dark:bg-stone-800 w-full max-w-md h-[80vh] rounded-2xl flex flex-col overflow-hidden relative">
@@ -296,7 +291,6 @@ export default function App() {
                         <h3 className="font-bold text-stone-800 dark:text-stone-200">Dark Mode</h3>
                         <button onClick={() => setFormPrefs({...formPrefs, darkMode: !formPrefs.darkMode})} className={`w-14 h-8 rounded-full p-1 transition-colors ${formPrefs.darkMode ? 'bg-purple-600' : 'bg-stone-300'}`}><div className={`w-6 h-6 bg-white rounded-full shadow-md transform transition-transform ${formPrefs.darkMode ? 'translate-x-6' : 'translate-x-0'}`} /></button>
                       </div>
-                      
                       <div className="border-t border-stone-100 dark:border-stone-700 pt-4">
                         <h3 className="font-bold text-stone-800 dark:text-stone-200 mb-2">Banner Image</h3>
                         <div className="flex gap-2">
@@ -304,7 +298,6 @@ export default function App() {
                             {formPrefs.bannerUrl && (<button onClick={() => setFormPrefs({...formPrefs, bannerUrl: undefined})} className="px-3 bg-red-100 text-red-600 rounded text-xs font-bold">Clear</button>)}
                         </div>
                       </div>
-
                       <div className="border-t border-stone-100 dark:border-stone-700 pt-4">
                         <h3 className="font-bold text-stone-800 dark:text-stone-200 mb-2">Background Wallpaper</h3>
                         <div className="flex gap-2">
@@ -312,7 +305,6 @@ export default function App() {
                             {formPrefs.backgroundUrl && (<button onClick={() => setFormPrefs({...formPrefs, backgroundUrl: undefined})} className="px-3 bg-red-100 text-red-600 rounded text-xs font-bold">Clear</button>)}
                         </div>
                       </div>
-
                       <div className="border-t border-stone-100 dark:border-stone-700 pt-4">
                         <h3 className="font-bold text-stone-800 dark:text-stone-200 mb-2">Accent Color</h3>
                         <div className="flex gap-3 justify-between">
@@ -321,7 +313,6 @@ export default function App() {
                             ))}
                         </div>
                       </div>
-
                       <div className="border-t border-stone-100 dark:border-stone-700 pt-4">
                         <h3 className="font-bold text-stone-800 dark:text-stone-200 mb-2">Typography</h3>
                         <div className="grid grid-cols-2 gap-2">
