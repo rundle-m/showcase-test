@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
-import { sdk } from '@farcaster/frame-sdk';
+// FIXED: Using the correct Official SDK ✅
+import { sdk } from '@farcaster/miniapp-sdk';
 import { supabase } from './supabaseClient';
 
 // --- TYPES ---
@@ -53,6 +54,7 @@ export default function App() {
       }
 
       const context = await sdk.context;
+      // Note: The new SDK context structure might be slightly different, but .user.fid is standard
       const currentViewerFid = context?.user?.fid || 999; 
       const fcUser = context?.user;
       setViewerFid(currentViewerFid);
@@ -100,6 +102,7 @@ export default function App() {
 
   const shareProfile = useCallback(() => {
     const appUrl = `https://showcase-test-tau.vercel.app/?fid=${viewerFid}`; 
+    // Note: Use openUrl for sharing logic if needed, but composeUrl is standard
     sdk.actions.openUrl(`https://warpcast.com/~/compose?text=${encodeURIComponent('Check out my Homepage! 🏠')}&embeds[]=${encodeURIComponent(appUrl)}`);
   }, [viewerFid]);
 
@@ -193,7 +196,7 @@ export default function App() {
                        ))}
                        <div className="flex gap-2 mt-2">
                            <button className="flex-1 py-2 bg-stone-100 dark:bg-stone-700 text-stone-500 dark:text-stone-300 text-sm font-bold rounded-lg disabled:opacity-50" onClick={() => setFormNFTs([...formNFTs, { id: Date.now(), name: "", imageUrl: "" }])} disabled={formNFTs.length >= 6}>+ Add URL</button>
-                           {/* NO WALLET BUTTON HERE IN STABLE V4 */}
+                           {/* WALLET REMOVED FOR STABILITY TESTING */}
                        </div>
                    </div>
 
