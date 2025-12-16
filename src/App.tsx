@@ -63,11 +63,11 @@ export default function App() {
       setIsSDKLoaded(true);
     };
     init();
-  }, []); // Empty dependency array is fine here
+  }, []);
 
   // --- ACTIONS ---
 
-  // 1. LOGIN & IDENTITY (Lite Version - No SDK)
+  // 1. LOGIN & IDENTITY (Native Context Version - Failsafe)
   const handleSignIn = async () => {
     setIsLoggingIn(true);
     try {
@@ -75,33 +75,19 @@ export default function App() {
       const nonce = Math.random().toString(36).substring(2, 15);
       await sdk.actions.signIn({ nonce });
 
-      // B. Get FID
+      // B. Get User Data directly from SDK Context (No external API needed)
       const context = await sdk.context;
-      const fid = context?.user?.fid;
-      if (!fid) throw new Error("No FID found");
+      const user = context?.user;
 
-      // C. Get Identity from Neynar (Using FETCH, not SDK)
-      const neynarKey = import.meta.env.VITE_NEYNAR_API_KEY;
-      if (!neynarKey) throw new Error("Missing Neynar Key");
+      if (!user?.fid) throw new Error("No FID found in context");
 
-      const res = await fetch(`https://api.neynar.com/v2/farcaster/user/bulk?fids=${fid}`, {
-         headers: { accept: 'application/json', api_key: neynarKey }
-      });
-      
-      if (!res.ok) throw new Error("Neynar lookup failed");
-      
-      const data = await res.json();
-      const user = data.users?.[0];
-
-      if (!user) throw new Error("User data not found");
-
-      // D. Construct Default Profile
+      // C. Construct Default Profile using Native Data
       const newProfile: Profile = {
-        id: fid,
-        username: user.username,
-        display_name: user.display_name,
-        pfp_url: user.pfp_url,
-        bio: user.profile.bio.text,
+        id: user.fid,
+        username: user.username || `user${user.fid}`,
+        display_name: user.displayName || "Farcaster User",
+        pfp_url: user.pfpUrl || "",
+        bio: "", // Context often doesn't have bio, user can fill this in
         custom_links: [],
         showcase_nfts: [],
         top_casts: [],
@@ -112,15 +98,17 @@ export default function App() {
       };
 
       setProfile(newProfile);
-      setViewerFid(fid);
+      setViewerFid(user.fid);
       
-      // E. Save to DB immediately
-      await supabase.from('profiles').upsert([newProfile]);
+      // D. Save to DB immediately
+      const { error } = await supabase.from('profiles').upsert([newProfile]);
+      if (error) throw error;
       
       setShowLanding(false);
       setIsEditing(true); 
 
     } catch (e: any) {
+      console.error(e);
       alert("Login failed: " + e.message);
     } finally {
       setIsLoggingIn(false);
@@ -135,14 +123,15 @@ export default function App() {
   };
 
   // --- RENDER HELPERS ---
-  if (!isSDKLoaded) return <div className="p-10 text-center">Loading...</div>;
+  if (!isSDKLoaded) return <div className="min-h-screen flex items-center justify-center p-10 text-stone-400">Loading...</div>;
 
   if (showLanding) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-stone-50 text-center">
-        <h1 className="text-4xl font-black mb-4">My Onchain Home</h1>
-        <p className="mb-8 text-stone-500">Share your Casts, Tokens, and Projects.</p>
-        <button onClick={handleSignIn} disabled={isLoggingIn} className="bg-purple-600 text-white px-8 py-4 rounded-xl font-bold text-lg">
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-stone-50 text-center dark:bg-stone-950 dark:text-white">
+        <div className="w-20 h-20 bg-purple-600 rounded-2xl mx-auto mb-6 flex items-center justify-center text-4xl shadow-lg rotate-3">🏠</div>
+        <h1 className="text-3xl font-black mb-3">My Onchain Home</h1>
+        <p className="mb-10 text-stone-500 max-w-xs mx-auto">Your personal showcase for Casts, Tokens, and Projects.</p>
+        <button onClick={handleSignIn} disabled={isLoggingIn} className="w-full max-w-xs bg-stone-900 dark:bg-white text-white dark:text-stone-900 py-4 rounded-xl font-bold text-lg shadow-xl hover:scale-105 transition-transform">
           {isLoggingIn ? "Verifying..." : "✨ Connect Identity"}
         </button>
       </div>
@@ -151,31 +140,38 @@ export default function App() {
 
   // --- MAIN PROFILE UI ---
   return (
-    <div className={`min-h-screen pb-20 ${profile?.dark_mode ? 'bg-stone-900 text-white' : 'bg-stone-50 text-stone-900'}`}>
+    <div className={`min-h-screen pb-24 ${profile?.dark_mode ? 'bg-stone-900 text-white' : 'bg-stone-50 text-stone-900'}`}>
       
       {/* HEADER */}
       <div className="h-40 bg-gradient-to-r from-violet-600 to-indigo-600 relative">
         {viewerFid === profileFid && !isEditing && (
-           <button onClick={() => setIsEditing(true)} className="absolute top-4 right-4 bg-black/30 text-white px-3 py-1 rounded-full text-xs font-bold">Edit</button>
+           <button onClick={() => setIsEditing(true)} className="absolute top-4 right-4 bg-black/20 backdrop-blur-md text-white px-4 py-1.5 rounded-full text-xs font-bold border border-white/20">Edit Page</button>
         )}
       </div>
 
       {/* IDENTITY CARD */}
       <div className="px-6 relative -mt-16 text-center">
-        <img src={profile?.pfp_url} className="w-32 h-32 rounded-2xl mx-auto border-4 border-white shadow-xl bg-stone-200 object-cover" />
-        <h1 className="text-2xl font-black mt-4">{profile?.display_name}</h1>
-        <p className="text-stone-500 text-sm">@{profile?.username}</p>
-        <p className="mt-2 text-sm opacity-80 max-w-xs mx-auto">{profile?.bio}</p>
+        <div className="w-32 h-32 mx-auto rounded-3xl p-1 bg-white dark:bg-stone-800 shadow-2xl rotate-2">
+            <img src={profile?.pfp_url || "https://placehold.co/200x200/6b21a8/FFF?text=User"} className="w-full h-full rounded-2xl object-cover bg-stone-200" />
+        </div>
+        <h1 className="text-2xl font-black mt-6">{profile?.display_name}</h1>
+        <p className="text-stone-500 text-sm font-medium">@{profile?.username}</p>
+        <p className="mt-4 text-sm opacity-80 max-w-xs mx-auto leading-relaxed">{profile?.bio || "Welcome to my onchain home."}</p>
       </div>
 
       {/* SECTIONS */}
-      <div className="px-6 mt-8 space-y-8">
+      <div className="px-6 mt-10 space-y-10">
         
         {/* 1. TOP CASTS */}
         <section>
-          <h3 className="font-bold text-xs uppercase tracking-widest text-stone-400 mb-3">Top Casts</h3>
+          <div className="flex items-center gap-2 mb-4">
+             <span className="text-lg">💬</span>
+             <h3 className="font-bold text-xs uppercase tracking-widest text-stone-400">Top Casts</h3>
+          </div>
           {profile?.top_casts?.length === 0 ? (
-            <div className="p-4 border border-dashed rounded-xl text-center text-sm text-stone-400">No casts selected yet.</div>
+            <div className="p-6 border-2 border-dashed border-stone-200 dark:border-stone-800 rounded-2xl text-center text-sm text-stone-400">
+                No casts pinned yet.
+            </div>
           ) : (
              <div>Casts go here...</div>
           )}
@@ -183,9 +179,14 @@ export default function App() {
 
         {/* 2. HOLDINGS (TOKENS) */}
         <section>
-          <h3 className="font-bold text-xs uppercase tracking-widest text-stone-400 mb-3">Wallet Holdings</h3>
+          <div className="flex items-center gap-2 mb-4">
+             <span className="text-lg">💰</span>
+             <h3 className="font-bold text-xs uppercase tracking-widest text-stone-400">Wallet Holdings</h3>
+          </div>
           {profile?.holdings?.length === 0 ? (
-            <div className="p-4 border border-dashed rounded-xl text-center text-sm text-stone-400">No tokens visible.</div>
+            <div className="p-6 border-2 border-dashed border-stone-200 dark:border-stone-800 rounded-2xl text-center text-sm text-stone-400">
+                Hidden or empty wallet.
+            </div>
           ) : (
              <div>Tokens go here...</div>
           )}
@@ -193,37 +194,44 @@ export default function App() {
 
         {/* 3. PROJECTS */}
         <section>
-          <h3 className="font-bold text-xs uppercase tracking-widest text-stone-400 mb-3">Projects</h3>
-          <div className="p-4 border border-dashed rounded-xl text-center text-sm text-stone-400">No projects added.</div>
+          <div className="flex items-center gap-2 mb-4">
+             <span className="text-lg">🚀</span>
+             <h3 className="font-bold text-xs uppercase tracking-widest text-stone-400">Projects</h3>
+          </div>
+          <div className="p-6 border-2 border-dashed border-stone-200 dark:border-stone-800 rounded-2xl text-center text-sm text-stone-400">
+             No projects added.
+          </div>
         </section>
 
       </div>
 
       {/* EDIT MODE OVERLAY */}
       {isEditing && (
-        <div className="fixed inset-0 bg-white dark:bg-stone-900 z-50 p-6 overflow-y-auto">
-          <h2 className="text-2xl font-bold mb-6">Edit Profile</h2>
+        <div className="fixed inset-0 bg-white dark:bg-stone-900 z-50 flex flex-col">
+          <div className="p-6 border-b dark:border-stone-800 flex justify-between items-center">
+              <h2 className="text-xl font-bold">Edit Profile</h2>
+              <button onClick={() => setIsEditing(false)} className="w-8 h-8 flex items-center justify-center bg-stone-100 dark:bg-stone-800 rounded-full font-bold">✕</button>
+          </div>
           
-          <div className="space-y-4">
-             <div>
-               <label className="text-xs font-bold text-stone-400">Display Name</label>
-               <input value={profile?.display_name} onChange={e => setProfile({...profile!, display_name: e.target.value})} className="w-full border-b p-2 bg-transparent outline-none"/>
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+             <div className="space-y-2">
+               <label className="text-xs font-bold text-stone-400 uppercase">Display Name</label>
+               <input value={profile?.display_name} onChange={e => setProfile({...profile!, display_name: e.target.value})} className="w-full p-3 bg-stone-50 dark:bg-stone-800 rounded-xl outline-none font-bold"/>
              </div>
              
-             <div>
-               <label className="text-xs font-bold text-stone-400">Bio</label>
-               <textarea value={profile?.bio} onChange={e => setProfile({...profile!, bio: e.target.value})} className="w-full border-b p-2 bg-transparent outline-none"/>
+             <div className="space-y-2">
+               <label className="text-xs font-bold text-stone-400 uppercase">Bio</label>
+               <textarea value={profile?.bio} onChange={e => setProfile({...profile!, bio: e.target.value})} className="w-full p-3 bg-stone-50 dark:bg-stone-800 rounded-xl outline-none h-24 resize-none"/>
              </div>
 
-             <div className="p-4 bg-stone-100 dark:bg-stone-800 rounded-xl text-center text-sm">
-                <p>✨ Feature coming soon:</p>
-                <p className="opacity-60">Auto-sync Top Casts & Tokens via Neynar</p>
+             <div className="p-5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-800 dark:text-indigo-300 rounded-xl text-center text-sm border border-indigo-100 dark:border-indigo-800">
+                <p className="font-bold mb-1">Coming Soon ⚡️</p>
+                <p className="opacity-80 text-xs">You'll soon be able to auto-sync your Top Casts and Wallet Tokens directly from here!</p>
              </div>
           </div>
 
-          <div className="fixed bottom-0 left-0 w-full p-4 border-t bg-white dark:bg-stone-900 flex gap-2">
-             <button onClick={() => setIsEditing(false)} className="flex-1 py-3 bg-stone-200 text-black rounded-lg font-bold">Cancel</button>
-             <button onClick={saveProfile} className="flex-1 py-3 bg-purple-600 text-white rounded-lg font-bold">Save Changes</button>
+          <div className="p-4 border-t dark:border-stone-800">
+             <button onClick={saveProfile} className="w-full py-4 bg-black dark:bg-white text-white dark:text-black rounded-xl font-bold text-lg shadow-lg">Save Changes</button>
           </div>
         </div>
       )}
