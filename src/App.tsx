@@ -67,27 +67,27 @@ export default function App() {
 
   // --- ACTIONS ---
 
-  // 1. LOGIN & IDENTITY (Native Context Version - Failsafe)
+  // 1. LOGIN (The Fix: Use Native Context, No External Fetch!)
   const handleSignIn = async () => {
     setIsLoggingIn(true);
     try {
-      // A. Sign In
+      // A. Sign In (Requests Authorization)
       const nonce = Math.random().toString(36).substring(2, 15);
       await sdk.actions.signIn({ nonce });
 
-      // B. Get User Data directly from SDK Context (No external API needed)
+      // B. Get User Data directly from SDK Context (Reliable & Instant)
       const context = await sdk.context;
       const user = context?.user;
 
       if (!user?.fid) throw new Error("No FID found in context");
 
-      // C. Construct Default Profile using Native Data
+      // C. Construct Default Profile using Data we ALREADY have
       const newProfile: Profile = {
         id: user.fid,
         username: user.username || `user${user.fid}`,
         display_name: user.displayName || "Farcaster User",
-        pfp_url: user.pfpUrl || "",
-        bio: "", // Context often doesn't have bio, user can fill this in
+        pfp_url: user.pfpUrl || "https://placehold.co/200x200/6b21a8/FFF?text=User",
+        bio: "", // Context doesn't have bio, user can add this later
         custom_links: [],
         showcase_nfts: [],
         top_casts: [],
@@ -109,7 +109,12 @@ export default function App() {
 
     } catch (e: any) {
       console.error(e);
-      alert("Login failed: " + e.message);
+      // Friendly error handling
+      if (e.message.includes("fetch")) {
+         alert("Network error saving profile. Please try again.");
+      } else {
+         alert("Login failed: " + e.message);
+      }
     } finally {
       setIsLoggingIn(false);
     }
@@ -152,7 +157,7 @@ export default function App() {
       {/* IDENTITY CARD */}
       <div className="px-6 relative -mt-16 text-center">
         <div className="w-32 h-32 mx-auto rounded-3xl p-1 bg-white dark:bg-stone-800 shadow-2xl rotate-2">
-            <img src={profile?.pfp_url || "https://placehold.co/200x200/6b21a8/FFF?text=User"} className="w-full h-full rounded-2xl object-cover bg-stone-200" />
+            <img src={profile?.pfp_url} className="w-full h-full rounded-2xl object-cover bg-stone-200" />
         </div>
         <h1 className="text-2xl font-black mt-6">{profile?.display_name}</h1>
         <p className="text-stone-500 text-sm font-medium">@{profile?.username}</p>
