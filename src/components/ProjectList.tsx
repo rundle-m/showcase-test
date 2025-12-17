@@ -14,6 +14,12 @@ export function ProjectList({ links = [], isOwner, onUpdate }: Props) {
 
   const addLink = () => {
     if (!newTitle || !newUrl) return;
+    
+    let finalUrl = newUrl.trim();
+    if (!/^https?:\/\//i.test(finalUrl)) {
+            finalUrl = 'https://' + finalUrl;
+    }
+    
     const updated = [...links, { id: Date.now(), title: newTitle, url: newUrl }];
     onUpdate(updated);
     setNewTitle("");
