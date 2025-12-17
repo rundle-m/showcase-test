@@ -25,11 +25,7 @@ export function useProfile() {
 
         // Load Data
         if (targetFid) {
-           const { data, error } = await supabase.from('profiles').select('*').eq('id', targetFid).single();
-           // NEW: We use the variable here, so the flag disappears!
-           if (error) {
-               console.warn("Error fetching profile:", error.message);
-           }   
+           const { data } = await supabase.from('profiles').select('*').eq('id', targetFid).single();
            if (data) setProfile(data);
            else if (targetFid === currentFid) {
               // User doesn't exist yet, show landing
@@ -58,8 +54,12 @@ export function useProfile() {
                bio: "",
                theme: 'farcaster',
                font: 'modern',
-               dark_mode: false
+               dark_mode: false,
+               // FIX: Initialize the new fields as empty arrays
+               custom_links: [],
+               showcase_nfts: []
            };
+           
            // Save to DB
            const { error } = await supabase.from('profiles').upsert([newProfile]);
            if (error) throw error;

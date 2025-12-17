@@ -1,3 +1,9 @@
+export interface Link {
+  id: number;
+  title: string;
+  url: string;
+}
+
 export interface Profile {
   id: number;
   username: string;
@@ -7,4 +13,6 @@ export interface Profile {
   theme: string;
   font: string;
   dark_mode: boolean;
+  custom_links: Link[];    // New
+  showcase_nfts: any[];    // New
 }

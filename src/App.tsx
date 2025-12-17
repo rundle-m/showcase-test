@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useProfile } from './hooks/useProfile';
 import { LoginScreen } from './components/LoginScreen';
+import { ProjectList } from './components/ProjectList'; // Import the new component
 
 export default function App() {
   const { profile, isLoading, isOwner, isLoggingIn, login, updateProfile } = useProfile();
@@ -11,6 +12,7 @@ export default function App() {
 
   return (
     <div className={`min-h-screen pb-20 ${profile.dark_mode ? 'bg-stone-900 text-white' : 'bg-stone-50 text-stone-900'}`}>
+       
        {/* HEADER */}
        <div className="h-40 bg-gradient-to-r from-violet-600 to-indigo-600 relative">
           {isOwner && !isEditing && (
@@ -25,6 +27,13 @@ export default function App() {
           <p className="text-stone-500">@{profile.username}</p>
           <p className="mt-2 text-sm opacity-80 max-w-xs mx-auto">{profile.bio}</p>
        </div>
+
+       {/* --- NEW: PROJECTS SECTION --- */}
+       <ProjectList 
+          links={profile.custom_links || []} 
+          isOwner={isOwner} 
+          onUpdate={(newLinks) => updateProfile({ custom_links: newLinks })} 
+       />
 
        {/* EDIT OVERLAY */}
        {isEditing && (
