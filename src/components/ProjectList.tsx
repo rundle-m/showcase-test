@@ -21,7 +21,7 @@ export function ProjectList({ links = [], isOwner, onUpdate }: Props) {
         finalUrl = 'https://' + finalUrl;
     }
     
-    const updated = [...links, { id: Date.now(), title: newTitle, url: newUrl }];
+    const updated = [...links, { id: Date.now(), title: newTitle, url: finalUrl }];
     onUpdate(updated);
     setNewTitle("");
     setNewUrl("");
